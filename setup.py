@@ -1,11 +1,16 @@
 from setuptools import setup, find_packages
 
+# Read the contents of README.md
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
     name='thoi',
-    version='v0.1.0',
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
     description='Torch - Higher Order Interactions',
-    long_description='A Python package to compute O information in Higher Order Interactions uing batch processing',
-    long_description_content_type='text/x-rst',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Laouen Mayal Louan Belloli, Ruben Herzog',
     author_email='laouen.belloli@gmail.com',
     url='https://github.com/Laouen/THOI',
