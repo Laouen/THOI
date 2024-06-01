@@ -1,9 +1,4 @@
 from setuptools import setup, find_packages
-import subprocess
-
-# Read the contents of your README file
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
 
 setup(
     name='thoi',
