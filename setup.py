@@ -5,11 +5,9 @@ import subprocess
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-cf_remote_version = subprocess.run(['git', 'describe', '--tags'], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
-
 setup(
     name='thoi',
-    version=cf_remote_version,
+    version='v0.1.0',
     description='A Python package to compute O information in Higher Order Interactions uing batch processing',
     author='Laouen Mayal Louan Belloli, Ruben Herzog',
     author_email='laouen.belloli@gmail.com',
