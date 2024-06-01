@@ -3,7 +3,9 @@ from setuptools import setup, find_packages
 setup(
     name='thoi',
     version='v0.1.0',
-    description='A Python package to compute O information in Higher Order Interactions uing batch processing',
+    description='Torch - Higher Order Interactions',
+    long_description='A Python package to compute O information in Higher Order Interactions uing batch processing'
+    long_description_content_type='text/x-rst',
     author='Laouen Mayal Louan Belloli, Ruben Herzog',
     author_email='laouen.belloli@gmail.com',
     url='https://github.com/Laouen/THOI',
