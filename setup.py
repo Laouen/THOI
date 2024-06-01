@@ -17,12 +17,14 @@ setup(
     packages=find_packages(),
     install_requires=[
         'numpy',
-        'torch',
         'tqdm',
         'scipy',
         'pandas',
         'networkx'
     ],
+    extras_require={
+        'cpu': ['torch==1.8.1+cpu'],
+    },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',

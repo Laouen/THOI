@@ -146,7 +146,7 @@ def multi_order_measures(X: np.ndarray,
         batch_aggregation = lambda X: [x for x in X if x is not None]
 
     if batch_data_collector is None:
-        batch_data_collector = lambda x: x
+        batch_data_collector = lambda *args: args
 
     T, N = X.shape
     max_order = N if max_order is None else max_order
