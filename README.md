@@ -52,7 +52,7 @@ Because PyTorch installation can depend on the user environment and requirements
 After installation, you can start using THOI in your projects. Here is a simple example:
 
 ```python
-from thoi.measures.gaussian_copula import 
+from thoi.measures.gaussian_copula import multi_order_measures
 import numpy as np
 
 X = np.random.normal(0,1, (1000, 10))
