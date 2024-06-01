@@ -10,30 +10,42 @@ THOI is a Python package designed to compute O information in Higher Order Inter
 
 Ensure you have Python 3.6 or higher installed.
 
-### Installing THOI with the CPU Version of PyTorch
+### Installing THOI with your prefered Versions of PyTorch
 
-For users who do not require GPU support, you can install THOI with the CPU version of PyTorch by running the following command:
+Because PyTorch installation can depend on the user environment and requirements (GPU or CPU support or a specific version of PyTorch), you need to install PyTorch separately before installing THOI. Follow these steps:
 
-```bash
-pip install thoi[cpu]
-```
+1. **Visit the [official PyTorch installation guide](https://pytorch.org/get-started/locally/):**
+    - Go to the PyTorch website and navigate to the "Get Started" page.
+    - Select your preferences for the following options:
+        - **PyTorch Build:** Stable or LTS (long-term support)
+        - **Your Operating System:** Linux, Mac, or Windows
+        - **Package:** Pip (recommended)
+        - **Language:** Python
+        - **Compute Platform:** CPU, CUDA 10.2, CUDA 11.1, etc.
 
-### Installing THOI with Other Versions of PyTorch
+2. **Get the Installation Command:**
+    - Based on your selections, the PyTorch website will provide the appropriate installation command.
+    - For example, for the CPU-only version, the command will look like this:
 
-For users who need GPU support or a specific version of PyTorch, you need to install PyTorch separately before installing THOI. Follow these steps:
+        ```bash
+        pip install torch==1.8.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        ```
 
-1. Visit the [official PyTorch installation guide](https://pytorch.org/get-started/locally/) and select the appropriate options for your system.
-2. Install PyTorch using the provided command. For example, for GPU support with CUDA 11.1:
+    - For the GPU version with CUDA 11.1, the command will look like this:
 
-    ```bash
-    pip install torch==1.8.1+cu111 -f https://download.pytorch.org/whl/torch_stable.html
-    ```
+        ```bash
+        pip install torch==1.8.1+cu111 -f https://download.pytorch.org/whl/torch_stable.html
+        ```
 
-3. Once PyTorch is installed, install THOI:
+3. **Install PyTorch:**
+    - Copy and run the command provided by the PyTorch website in your terminal.
 
-    ```bash
-    pip install thoi
-    ```
+4. **Install THOI:**
+    - Once PyTorch is installed, install THOI using:
+
+        ```bash
+        pip install thoi
+        ```
 
 ## Usage
 
