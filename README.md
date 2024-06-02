@@ -59,13 +59,13 @@ import numpy as np
 X = np.random.normal(0,1, (1000, 10))
 
 # Computation of O information for the entire system
-measure = nplets_measures(X)
+measures = nplets_measures(X)
 
 # Computation of O info for the sub-system composed by 0, 1 and 3
-measure = nplets_measures(X, [0,1,3])
+measures = nplets_measures(X, [0,1,3])
 
 # Computation of O info for the sub-system composed by 0, 1 and 3
-measure = nplets_measures(X, [[0,1,3],[3,7,4],[2,6,3]])
+measures = nplets_measures(X, [[0,1,3],[3,7,4],[2,6,3]])
 
 # Extensive computation of O information measures over all combinations of X
 measures = multi_order_measures(X)

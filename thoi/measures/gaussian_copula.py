@@ -120,13 +120,14 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     if nplets is None:
         nplets = torch.arange(N)
 
-    # If only nplet to calculate
-    if len(nplets.shape) < 2:
-        nplets = torch.unsqueeze(nplets, dim=0)
-    
     # If nplets are not tensors, convert to tensor
     if not torch.is_tensor(nplets):
         nplets = torch.tensor(nplets)
+
+    # If only nplet to calculate
+    if len(nplets.shape) < 2:
+        nplets = torch.unsqueeze(nplets, dim=0)
+
 
     # Process in correct device
     # Send elements to cuda if computing on GPU
