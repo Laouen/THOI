@@ -23,7 +23,7 @@ def simulated_annealing(X: np.ndarray,
                         order: int,
                         initial_temp:float=100.0,
                         cooling_rate:float=0.99,
-                        max_iterations:int=100000,
+                        max_iterations:int=1000,
                         repeat:int=10,
                         use_cpu:bool=False):
 
