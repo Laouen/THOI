@@ -1,7 +1,8 @@
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 from tqdm.autonotebook import tqdm
 from functools import partial
+from collections import defaultdict
 
 import pandas as pd
 import scipy as sp
@@ -98,31 +99,62 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 
-def nplet_measures(X: np.ndarray):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def nplets_measures(X: np.ndarray, nplets: Optional[np.ndarray] = None, T:int = None, use_cpu:bool = False, batch_size:int = 1000000, covmat_precomputed:bool = False):
+    # make device cpu if not cuda available or cuda if available
+    using_GPU = torch.cuda.is_available() and not use_cpu
+    device = torch.device('cuda' if using_GPU else 'cpu')
 
-    T, N = np.shape(X)
+    # Accept multivariate data or covariance matrix
+    if covmat_precomputed:
+        N1, N = X.shape[1]
+        assert N1 == N, 'Covariance matrix should be a squared matrix'
+        covmat = torch.tensor(covmat)
+    else:
+        T, N = np.shape(X)
+        covmat = torch.tensor(gaussianCopula(X)[1])
 
-    covmat = gaussianCopula(X)[1]
-    covmat = torch.Tensor(np.expand_dims(covmat, axis=0))
     covmat.to(device)
 
-    allmin1 = _all_min_1_ids(N)
+    # compute for the entire systems
+    if nplets is None:
+        nplets = np.arange(N)
+
+    # if only nplet to calculate
+    if len(nplets.shape) < 2:
+        nplets = np.expand_dims(nplets, axis=0)
+
+    n_nplets, order = np.shape(nplets)
+    allmin1 = _all_min_1_ids(order)
     bc1 = _gaussian_entropy_bias_correction(1,T)
-    bcN = _gaussian_entropy_bias_correction(N,T)
-    bcNmin1 = _gaussian_entropy_bias_correction(N-1,T)
+    bcN = _gaussian_entropy_bias_correction(order,T)
+    bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
 
-    nplet_tc, nplet_dtc, nplet_o, nplet_s = _get_tc_dtc_from_batched_covmat(
-        covmat, allmin1, bc1, bcN, bcNmin1
-    )
+    # results outputs all measures
+    results = np.zeros((n_nplets, 4))
+    for i in range(0,len(nplets),batch_size):
 
-    return (
-        nplet_tc.cpu().numpy()[0],
-        nplet_dtc.cpu().numpy()[0],
-        nplet_o.cpu().numpy()[0],
-        nplet_s.cpu().numpy()[0]
-    )
+        curr_batch_size = min(batch_size, len(nplets) - i)
 
+        # |batch_size| x |order| x |order|
+        batch_covmat = torch.stack([
+            covmat[nplet_idxs][:,nplet_idxs]
+            for nplet_idxs in nplets[i:i+curr_batch_size]
+        ])
+
+        # batch_res = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
+        batch_res = torch.stack(_get_tc_dtc_from_batched_covmat(
+            batch_covmat, allmin1, bc1, bcN, bcNmin1
+        )).T
+
+
+        results[np.arange(i,i+curr_batch_size)] = batch_res.cpu().numpy()
+
+    # if only one result, return is as value not list
+    if len(results) == 1:
+        results = results[0]
+
+    return results
+    
 
 def multi_order_measures(X: np.ndarray,
                         min_order: int=3,
