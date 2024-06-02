@@ -19,7 +19,14 @@ def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
     return -batched_res[:,2].flatten()
 
 
-def simulated_annealing(X: np.ndarray, order: int, initial_temp:float=100.0, cooling_rate:float=0.99, max_iterations:int=100000, repeat:int=10, use_cpu:bool=False):
+def simulated_annealing(X: np.ndarray, 
+                        order: int,
+                        initial_temp:float=100.0,
+                        cooling_rate:float=0.99,
+                        max_iterations:int=100000,
+                        repeat:int=10,
+                        use_cpu:bool=False):
+
     # make device cpu if not cuda available or cuda if available
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
@@ -31,7 +38,10 @@ def simulated_annealing(X: np.ndarray, order: int, initial_temp:float=100.0, coo
 
     # Initialize random solution
     # |batch_size| x |order|
-    current_solution = torch.stack([torch.randperm(N, device=device)[:order] for _ in range(repeat)])
+    current_solution = torch.stack([
+        torch.randperm(N, device=device)[:order]
+        for _ in range(repeat)
+    ])
     # |batch_size|
     current_energy = gc_oinfo(covmat, T, current_solution)
 
