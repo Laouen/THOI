@@ -1,8 +1,10 @@
 import numpy as np
 from tqdm import trange
 import torch
+from functools import partial
 
-from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula
+from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula, multi_order_measures
+from thoi.collectors import batch_to_tensor, concat_tensors
 
 
 def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
@@ -19,30 +21,32 @@ def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
     return batched_res[:,2].flatten()
 
 
-def greedy(X:np.ndarray, initial_order:int, max_order:int, repeat:int=10, use_cpu:bool=False):
+def greedy(X:np.ndarray, initial_order:int, max_order:int, repeat:int=10, use_cpu:bool=False, batch_size:int=1000000):
+
+    current_solution = multi_order_measures(
+        X, initial_order, initial_order, batch_size=batch_size, use_cpu=use_cpu,
+        batch_data_collector=partial(batch_to_tensor, top_k=repeat),
+        batch_aggregation=partial(concat_tensors, top_k=repeat)
+    )[-1]
+
+    T, N = X.shape
+
+    covmat = torch.tensor(gaussian_copula(X)[1])
 
     # make device cpu if not cuda available or cuda if available
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
 
-    T, N = X.shape
-
-    covmat = torch.tensor(gaussian_copula(X)[1])
     covmat = covmat.to(device)
+    current_solution = current_solution.to(device)
 
-    current_solution = torch.stack([
-        torch.randperm(N, device=device)[:initial_order]
-        for _ in range(repeat)
-    ])
-
-    best_score = gc_oinfo(covmat, T, current_solution)
-
-    best_scores = []
+    best_scores = [gc_oinfo(covmat, T, current_solution)]
     for _ in trange(initial_order, max_order, leave=False, desc='Order'):
         best_candidate, best_score = next_order_greedy(covmat, T, current_solution)
         best_scores.append(best_score)
 
         current_solution = torch.cat((current_solution, best_candidate.unsqueeze(1)) , dim=1)
+
     
     return current_solution, torch.stack(best_scores).T
 
