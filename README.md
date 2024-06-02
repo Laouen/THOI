@@ -52,12 +52,34 @@ Because PyTorch installation can depend on the user environment and requirements
 After installation, you can start using THOI in your projects. Here is a simple example:
 
 ```python
-from thoi.measures.gaussian_copula import multi_order_measures
+from thoi.measures.gaussian_copula import multi_order_measures, nplets_measures
+from thoi.heuristics import simulated_annealing, greedy
 import numpy as np
 
 X = np.random.normal(0,1, (1000, 10))
 
+# Computation of O information for the entire system
+measures = nplets_measures(X)
+
+# Computation of O info for the sub-system composed by 0, 1 and 3
+measures = nplets_measures(X, [0,1,3])
+
+# Computation of O info for the sub-system composed by 0, 1 and 3
+measures = nplets_measures(X, [[0,1,3],[3,7,4],[2,6,3]])
+
+# Extensive computation of O information measures over all combinations of X
 measures = multi_order_measures(X)
+
+# compute the best 10 combinations using greedy, starting by exaustive search in 
+# lower order and building from there. Result shows best O information for 
+# each built optimal orders
+best_partitions, best_scores = greedy(X, 3, 5, repeat=10)
+
+# compute the best 10 combinations using simulated annealing: There are two initialization options
+# 1. Starting by exaustive search in lower order, then building with gready.
+# 2. Selection random sample of initial solutions.
+# Result shows best O information for each built optimal orders
+best_partitions, best_scores = simulated_annealing(X, 5, repeat=10)
 ```
 
 For detailed usage and examples, please refer to the [documentation](https://github.com/Laouen/THOI).

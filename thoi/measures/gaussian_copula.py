@@ -109,7 +109,7 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     if covmat_precomputed:
         N1, N = X.shape
         assert N1 == N, 'Covariance matrix should be a squared matrix'
-        covmat = torch.tensor(X)
+        covmat = X if torch.is_tensor(X) else torch.tensor(X)
     else:
         assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
         T, N = X.shape
@@ -120,13 +120,14 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     if nplets is None:
         nplets = torch.arange(N)
 
-    # If only nplet to calculate
-    if len(nplets.shape) < 2:
-        nplets = torch.unsqueeze(nplets, dim=0)
-    
     # If nplets are not tensors, convert to tensor
     if not torch.is_tensor(nplets):
         nplets = torch.tensor(nplets)
+
+    # If only nplet to calculate
+    if len(nplets.shape) < 2:
+        nplets = torch.unsqueeze(nplets, dim=0)
+
 
     # Process in correct device
     # Send elements to cuda if computing on GPU
@@ -233,11 +234,11 @@ def multi_order_measures(X: np.ndarray,
             )
 
             data = batch_data_collector(
-                partition_idxs.cpu().numpy(),
-                nplets_o.cpu().numpy(),
-                nplets_s.cpu().numpy(),
-                nplets_tc.cpu().numpy(),
-                nplets_dtc.cpu().numpy(),
+                partition_idxs,
+                nplets_o,
+                nplets_s,
+                nplets_tc,
+                nplets_dtc,
                 bn
             )
             batched_data.append(data)

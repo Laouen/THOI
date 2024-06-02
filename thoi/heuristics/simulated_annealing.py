@@ -1,8 +1,10 @@
 import numpy as np
 from tqdm import trange
 import torch
+from functools import partial
 
-from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula
+from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula, multi_order_measures
+from thoi.collectors import batch_to_tensor, concat_tensors
 
 
 def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
@@ -23,9 +25,11 @@ def simulated_annealing(X: np.ndarray,
                         order: int,
                         initial_temp:float=100.0,
                         cooling_rate:float=0.99,
-                        max_iterations:int=100000,
+                        max_iterations:int=1000,
                         repeat:int=10,
-                        use_cpu:bool=False):
+                        use_cpu:bool=False,
+                        init_method:str='lower_order',
+                        lower_order:int=1):
 
     # make device cpu if not cuda available or cuda if available
     using_GPU = torch.cuda.is_available() and not use_cpu
@@ -37,11 +41,30 @@ def simulated_annealing(X: np.ndarray,
     covmat.to(device)
 
     # Initialize random solution
-    # |batch_size| x |order|
-    current_solution = torch.stack([
-        torch.randperm(N, device=device)[:order]
-        for _ in range(repeat)
-    ])
+    if init_method == 'random':
+        # |batch_size| x |order|
+        current_solution = torch.stack([
+            torch.randperm(N, device=device)[:order]
+            for _ in range(repeat)
+        ])
+
+    elif init_method == 'lower_order':
+        current_solution = multi_order_measures(
+            X, order-lower_order, order-lower_order, batch_size=repeat, use_cpu=use_cpu,
+            batch_data_collector=partial(batch_to_tensor, top_k=repeat),
+            batch_aggregation=partial(concat_tensors, top_k=repeat)
+        )[-1].to(device)
+        all_elements = torch.arange(N, device=device)
+        valid_candidates = [
+            all_elements[~torch.isin(all_elements, current_solution[b])]
+            for b in torch.arange(repeat, device=device)
+        ]
+        valid_candidates = torch.stack([
+            vd[torch.randperm(len(vd), device=device)][:lower_order]
+            for vd in valid_candidates
+        ])
+        current_solution = torch.cat((current_solution, valid_candidates) , dim=1)
+
     # |batch_size|
     current_energy = gc_oinfo(covmat, T, current_solution)
 

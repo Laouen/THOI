@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import pandas as pd
 import numpy as np
+import torch
 
 def batch_to_csv(partition_idxs: np.ndarray,
                  nplets_o: np.ndarray,
@@ -24,23 +25,26 @@ def batch_to_csv(partition_idxs: np.ndarray,
     
     assert N == len(columns), f'N must be equal to len(columns). {N} != {len(columns)}'
 
-    # if only_synergestic; remove nplets with nplet_o >= 0
+    # If only_synergestic; remove nplets with nplet_o >= 0
     if only_synergestic:
-        to_keep = np.where(nplets_o < 0)[0]
+        to_keep = torch.where(nplets_o < 0)[0]
         nplets_tc = nplets_tc[to_keep]
         nplets_dtc = nplets_dtc[to_keep]
         nplets_o = nplets_o[to_keep]
         nplets_s = nplets_s[to_keep]
-        partition_idxs = partition_idxs[to_keep]
+        partition_idxs = partition_idxs[to_keep.cpu()]
 
+    # One we removed not synergistic if not required on GPU, we move to CPU the
+    # final results to save
     df_meas = pd.DataFrame({
-        'tc': nplets_tc,
-        'dtc': nplets_dtc,
-        'o': nplets_o,
-        's': nplets_s
+        'tc': nplets_tc.cpu().numpy(),
+        'dtc': nplets_dtc.cpu().numpy(),
+        'o': nplets_o.cpu().numpy(),
+        's': nplets_s.cpu().numpy()
     })
 
     # Create a DataFrame with the n-plets
+    partition_idxs = partition_idxs
     batch_size, order = partition_idxs.shape
     bool_array = np.zeros((batch_size, N), dtype=bool)
     rows = np.arange(batch_size).reshape(-1, 1)
@@ -61,3 +65,65 @@ def concatenate_csv(batched_dataframes, output_path, sep='\t'):
 
     df = pd.concat(batched_dataframes, axis=0)
     df.to_csv(output_path, index=False, sep=sep)
+
+
+def batch_to_tensor(partition_idxs: np.ndarray,
+                    nplets_o: np.ndarray,
+                    nplets_s: np.ndarray,
+                    nplets_tc: np.ndarray,
+                    nplets_dtc: np.ndarray,
+                    bn:int,
+                    only_synergestic: bool=False,
+                    top_k: Optional[int] = None):
+    
+    # If only_synergestic; remove nplets with nplet_o >= 0
+    if only_synergestic:
+        to_keep = torch.where(nplets_o < 0)[0]
+        nplets_tc = nplets_tc[to_keep]
+        nplets_dtc = nplets_dtc[to_keep]
+        nplets_o = nplets_o[to_keep]
+        nplets_s = nplets_s[to_keep]
+        partition_idxs = partition_idxs[to_keep.cpu()]
+    
+    if top_k is not None and len(nplets_o) > top_k:
+        _, indices = torch.topk(nplets_o, top_k, largest=False, sorted=True)
+
+        nplets_tc = nplets_tc[indices]
+        nplets_dtc = nplets_dtc[indices]
+        nplets_o = nplets_o[indices]
+        nplets_s = nplets_s[indices]
+        partition_idxs = partition_idxs[indices.cpu()]
+    
+    return (
+        nplets_tc,
+        nplets_dtc,
+        nplets_o,
+        nplets_s,
+        partition_idxs
+    )
+
+
+def concat_tensors(batched_tensors: List[Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor]],
+                   top_k: Optional[int] = None):
+    
+    nplets_tc = torch.cat([batch[0] for batch in batched_tensors])
+    nplets_dtc = torch.cat([batch[1] for batch in batched_tensors])
+    nplets_o = torch.cat([batch[2] for batch in batched_tensors])
+    nplets_s = torch.cat([batch[3] for batch in batched_tensors])
+    partition_idxs = torch.cat([batch[4] for batch in batched_tensors])
+
+    if top_k is not None and len(nplets_o) > top_k:
+        _, indices = torch.topk(nplets_o, top_k, largest=False, sorted=True)
+        nplets_tc = nplets_tc[indices]
+        nplets_dtc = nplets_dtc[indices]
+        nplets_o = nplets_o[indices]
+        nplets_s = nplets_s[indices]
+        partition_idxs = partition_idxs[indices.cpu()]
+
+    return (
+        nplets_tc,
+        nplets_dtc,
+        nplets_o,
+        nplets_s,
+        partition_idxs
+    )
