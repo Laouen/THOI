@@ -1,4 +1,4 @@
-from typing import Optional, Callable, List
+from typing import Optional, Callable, Union
 
 from tqdm.autonotebook import tqdm
 from functools import partial
@@ -9,11 +9,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from ..dataset import CovarianceDataset, NpletsCovariancesDataset
+from ..dataset import CovarianceDataset
 from ..collectors import batch_to_csv
 
 
-def gaussianCopula(X):
+def gaussian_copula(X):
     """
     Transform the data into a Gaussian copula and compute the covariance matrix.
     
@@ -98,60 +98,67 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 
-def nplets_measures(X: np.ndarray, nplets: Optional[np.ndarray] = None, T:int = None, use_cpu:bool = False, batch_size:int = 1000000, covmat_precomputed:bool = False):
+def nplets_measures(X: Union[np.ndarray, torch.tensor],
+                    nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
+                    T:int = None,
+                    covmat_precomputed:bool = False,
+                    use_cpu:bool = False):
 
+    # Handle different options for X parameter
     # Accept multivariate data or covariance matrix
     if covmat_precomputed:
-        N1, N = X.shape[1]
+        N1, N = X.shape
         assert N1 == N, 'Covariance matrix should be a squared matrix'
-        covmat = torch.tensor(covmat)
+        covmat = torch.tensor(X)
     else:
-        T, N = np.shape(X)
-        covmat = torch.tensor(gaussianCopula(X)[1])
+        assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
+        T, N = X.shape
+        covmat = torch.tensor(gaussian_copula(X)[1])
 
-    # compute for the entire systems
+    # Handle different options for nplet parameter
+    # Compute for the entire systems
     if nplets is None:
-        nplets = np.arange(N)
+        nplets = torch.arange(N)
 
-    # if only nplet to calculate
+    # If only nplet to calculate
     if len(nplets.shape) < 2:
         nplets = torch.unsqueeze(nplets, dim=0)
+    
+    # If nplets are not tensors, convert to tensor
+    if not torch.is_tensor(nplets):
+        nplets = torch.tensor(nplets)
 
-    # send elements to cuda if computing on GPU
+    # Process in correct device
+    # Send elements to cuda if computing on GPU
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
     covmat = covmat.to(device)
     nplets = nplets.to(device)
 
+    # Generate the covariance matrices for each nplet
+    # |batch_size| x |order| x |order|
+    nplets_covmat = torch.stack([
+        covmat[nplet_idxs][:,nplet_idxs]
+        for nplet_idxs in nplets
+    ])
+
+    # Compute measures
     # Compute bias corrector
-    n_nplets, order = nplets.shape
+    _, order = nplets.shape
     allmin1 = _all_min_1_ids(order)
     bc1 = _gaussian_entropy_bias_correction(1,T)
     bcN = _gaussian_entropy_bias_correction(order,T)
     bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
 
-    # results outputs all measures stored in CPU
-    results = torch.zeros((n_nplets, 4))
-    for i in torch.arange(0,len(nplets),batch_size, device=device):
+    # Batch process all nplets at once
+    # batch_res = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
+    results = torch.stack(_get_tc_dtc_from_batched_covmat(
+        nplets_covmat, allmin1, bc1, bcN, bcNmin1
+    )).T
 
-        curr_batch_size = min(batch_size, len(nplets) - i)
-
-        # |batch_size| x |order| x |order|
-        batch_covmat = torch.stack([
-            covmat[nplet_idxs][:,nplet_idxs]
-            for nplet_idxs in nplets[i:i+curr_batch_size]
-        ])
-
-        # batch_res = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
-        batch_res = torch.stack(_get_tc_dtc_from_batched_covmat(
-            batch_covmat, allmin1, bc1, bcN, bcNmin1
-        )).T
-
-        results[np.arange(i,i+curr_batch_size)] = batch_res
-
-    # if only one result, return is as value not list
-    if len(results) == 1:
-        results = results[0]
+    # If only one result, return is as value not list
+    if results.shape[0] == 1:
+        results = torch.squeeze(results, dim=0)
 
     return results
     
@@ -194,7 +201,7 @@ def multi_order_measures(X: np.ndarray,
     device = torch.device('cuda' if using_GPU else 'cpu')
 
     # Gaussian Copula of data
-    covmat = gaussianCopula(X)[1]
+    covmat = gaussian_copula(X)[1]
 
     # To compute using pytorch, we need to compute each order separately
     batched_data = []
