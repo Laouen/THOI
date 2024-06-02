@@ -29,3 +29,24 @@ class CovarianceDataset(IterableDataset):
 
             # (order, order)
             yield partition_idxs, self.matrix[partition_idxs][:,partition_idxs]
+
+
+class NpletsCovariancesDataset(IterableDataset):
+    def __init__(self, matrix: torch.tensor, nplets: torch.tensor):
+        self.matrix = matrix
+        self.nplets = nplets
+
+    def __len__(self):
+        """Returns the number of combinations of features of the specified order."""
+        return len(self.nplets)
+
+    def __iter__(self):
+        """
+        Iterate over all combinations of features in the dataset.
+
+        Yields:
+            tuple: A tuple containing:
+                partition_covmat (np.ndarray): The submatrix of the covariance matrix corresponding to the current combination, shape (order, order).
+        """
+        for partition_idxs in self.nplets:
+            yield self.matrix[partition_idxs][:,partition_idxs]

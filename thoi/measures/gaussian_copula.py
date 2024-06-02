@@ -2,7 +2,6 @@ from typing import Optional, Callable, List
 
 from tqdm.autonotebook import tqdm
 from functools import partial
-from collections import defaultdict
 
 import pandas as pd
 import scipy as sp
@@ -10,7 +9,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from ..dataset import CovarianceDataset
+from ..dataset import CovarianceDataset, NpletsCovariancesDataset
 from ..collectors import batch_to_csv
 
 
@@ -100,9 +99,6 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
 
 
 def nplets_measures(X: np.ndarray, nplets: Optional[np.ndarray] = None, T:int = None, use_cpu:bool = False, batch_size:int = 1000000, covmat_precomputed:bool = False):
-    # make device cpu if not cuda available or cuda if available
-    using_GPU = torch.cuda.is_available() and not use_cpu
-    device = torch.device('cuda' if using_GPU else 'cpu')
 
     # Accept multivariate data or covariance matrix
     if covmat_precomputed:
@@ -113,25 +109,30 @@ def nplets_measures(X: np.ndarray, nplets: Optional[np.ndarray] = None, T:int = 
         T, N = np.shape(X)
         covmat = torch.tensor(gaussianCopula(X)[1])
 
-    covmat.to(device)
-
     # compute for the entire systems
     if nplets is None:
         nplets = np.arange(N)
 
     # if only nplet to calculate
     if len(nplets.shape) < 2:
-        nplets = np.expand_dims(nplets, axis=0)
+        nplets = torch.unsqueeze(nplets, dim=0)
 
-    n_nplets, order = np.shape(nplets)
+    # send elements to cuda if computing on GPU
+    using_GPU = torch.cuda.is_available() and not use_cpu
+    device = torch.device('cuda' if using_GPU else 'cpu')
+    covmat = covmat.to(device)
+    nplets = nplets.to(device)
+
+    # Compute bias corrector
+    n_nplets, order = nplets.shape
     allmin1 = _all_min_1_ids(order)
     bc1 = _gaussian_entropy_bias_correction(1,T)
     bcN = _gaussian_entropy_bias_correction(order,T)
     bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
 
-    # results outputs all measures
-    results = np.zeros((n_nplets, 4))
-    for i in range(0,len(nplets),batch_size):
+    # results outputs all measures stored in CPU
+    results = torch.zeros((n_nplets, 4))
+    for i in torch.arange(0,len(nplets),batch_size, device=device):
 
         curr_batch_size = min(batch_size, len(nplets) - i)
 
@@ -146,8 +147,7 @@ def nplets_measures(X: np.ndarray, nplets: Optional[np.ndarray] = None, T:int = 
             batch_covmat, allmin1, bc1, bcN, bcNmin1
         )).T
 
-
-        results[np.arange(i,i+curr_batch_size)] = batch_res.cpu().numpy()
+        results[np.arange(i,i+curr_batch_size)] = batch_res
 
     # if only one result, return is as value not list
     if len(results) == 1:
