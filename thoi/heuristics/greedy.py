@@ -21,7 +21,7 @@ def _gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
     return batched_res[:,2].flatten()
 
 
-def greedy(X:np.ndarray, max_order:int, initial_order:int=3, repeat:int=10, use_cpu:bool=False, batch_size:int=1000000):
+def greedy(X:np.ndarray, order:int, initial_order:int=3, repeat:int=10, use_cpu:bool=False, batch_size:int=1000000):
 
     current_solution = multi_order_measures(
         X, initial_order, initial_order, batch_size=batch_size, use_cpu=use_cpu,
@@ -41,7 +41,7 @@ def greedy(X:np.ndarray, max_order:int, initial_order:int=3, repeat:int=10, use_
     current_solution = current_solution.to(device).contiguous()
 
     best_scores = [_gc_oinfo(covmat, T, current_solution)]
-    for _ in trange(initial_order, max_order, leave=False, desc='Order'):
+    for _ in trange(initial_order, order, leave=False, desc='Order'):
         best_candidate, best_score = next_order_greedy(covmat, T, current_solution)
         best_scores.append(best_score)
 
