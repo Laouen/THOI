@@ -5,8 +5,8 @@ import numpy as np
 import torch
 
 class CovarianceDataset(IterableDataset):
-    def __init__(self, matrix: np.array, n_variables: int, partition_order: int):
-        self.matrix = torch.tensor(matrix)
+    def __init__(self, covmat: np.ndarray, n_variables: int, partition_order: int):
+        self.covmat = torch.tensor(covmat).contiguous()
         self.n_variables = n_variables
         self.partition_order = partition_order
         self.partitions_generator = combinations(range(self.n_variables), self.partition_order)
@@ -25,15 +25,18 @@ class CovarianceDataset(IterableDataset):
                 - partition_covmat (np.ndarray): The submatrix of the covariance matrix corresponding to the current combination, shape (order, order).
         """
         for partition_idxs in self.partitions_generator:
-            partition_idxs = np.array(partition_idxs)
+            partition_idxs = torch.tensor(partition_idxs)
 
             # (order, order)
-            yield partition_idxs, self.matrix[partition_idxs][:,partition_idxs]
+            yield partition_idxs, self.covmat[partition_idxs][:,partition_idxs]
 
 
 class NpletsCovariancesDataset(IterableDataset):
-    def __init__(self, matrix: torch.tensor, nplets: torch.tensor):
-        self.matrix = matrix
+    def __init__(self, covmat: torch.tensor, nplets: torch.tensor):
+
+        assert covmat.device == nplets.device, 'covariance and nplets'
+
+        self.covmat = covmat
         self.nplets = nplets
 
     def __len__(self):
@@ -46,7 +49,7 @@ class NpletsCovariancesDataset(IterableDataset):
 
         Yields:
             tuple: A tuple containing:
-                partition_covmat (np.ndarray): The submatrix of the covariance matrix corresponding to the current combination, shape (order, order).
+                partition_covmat (np.ndarray): The subcovmat of the covariance matrix corresponding to the current combination, shape (order, order).
         """
         for partition_idxs in self.nplets:
-            yield self.matrix[partition_idxs][:,partition_idxs]
+            yield self.covmat[partition_idxs][:,partition_idxs]

@@ -6,6 +6,40 @@ from functools import partial
 from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula, multi_order_measures
 from thoi.collectors import batch_to_tensor, concat_tensors
 
+def init_lower_order(X: np.ndarray, order:int, lower_order:int, repeat:int, use_cpu:bool, device:torch.device):
+    N = X.shape[1]
+
+    # |repeat| x |lower_order|
+    current_solution = multi_order_measures(
+        X, lower_order, lower_order, batch_size=repeat, use_cpu=use_cpu,
+        batch_data_collector=partial(batch_to_tensor, top_k=repeat),
+        batch_aggregation=partial(concat_tensors, top_k=repeat)
+    )[-1].to(device)
+
+    # |N|
+    all_elements = torch.arange(N, device=device)
+    
+    # |repeat| x |order-lower_order|
+    valid_candidates = [
+        all_elements[~torch.isin(all_elements, current_solution[b])]
+        for b in torch.arange(repeat, device=device)
+    ]
+
+    # |repeat| x |order-lower_order|
+    valid_candidates = torch.stack([
+        vd[torch.randperm(len(vd), device=device)[:order-lower_order]]
+        for vd in valid_candidates
+    ]).contiguous()
+    
+    # |repeat| x |order|
+    return torch.cat((current_solution, valid_candidates) , dim=1).contiguous()
+
+def init_random(N:int, order:int, repeat:int, device:torch.device):
+    return torch.stack([
+        torch.randperm(N, device=device)[:order]
+        for _ in range(repeat)
+    ])
+
 
 def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
 
@@ -29,7 +63,10 @@ def simulated_annealing(X: np.ndarray,
                         repeat:int=10,
                         use_cpu:bool=False,
                         init_method:str='lower_order',
-                        lower_order:int=1):
+                        lower_order:int=None):
+
+    lower_order = order-1 if lower_order is None else lower_order
+    assert init_method != 'lower_order' or lower_order < order, 'Init from optima lower order cannot start from a lower_order higher than the order to compute.' 
 
     # make device cpu if not cuda available or cuda if available
     using_GPU = torch.cuda.is_available() and not use_cpu
@@ -38,32 +75,15 @@ def simulated_annealing(X: np.ndarray,
     T, N = X.shape
 
     covmat = torch.tensor(gaussian_copula(X)[1])
-    covmat.to(device)
+    covmat = covmat.to(device).contiguous()
 
     # Initialize random solution
+    # |batch_size| x |order|
     if init_method == 'random':
-        # |batch_size| x |order|
-        current_solution = torch.stack([
-            torch.randperm(N, device=device)[:order]
-            for _ in range(repeat)
-        ])
+        current_solution = init_random(N, order, repeat, device)
 
     elif init_method == 'lower_order':
-        current_solution = multi_order_measures(
-            X, order-lower_order, order-lower_order, batch_size=repeat, use_cpu=use_cpu,
-            batch_data_collector=partial(batch_to_tensor, top_k=repeat),
-            batch_aggregation=partial(concat_tensors, top_k=repeat)
-        )[-1].to(device)
-        all_elements = torch.arange(N, device=device)
-        valid_candidates = [
-            all_elements[~torch.isin(all_elements, current_solution[b])]
-            for b in torch.arange(repeat, device=device)
-        ]
-        valid_candidates = torch.stack([
-            vd[torch.randperm(len(vd), device=device)][:lower_order]
-            for vd in valid_candidates
-        ])
-        current_solution = torch.cat((current_solution, valid_candidates) , dim=1)
+        current_solution = init_lower_order(X, order, lower_order, repeat, use_cpu, device)
 
     # |batch_size|
     current_energy = gc_oinfo(covmat, T, current_solution)
@@ -73,7 +93,7 @@ def simulated_annealing(X: np.ndarray,
     valid_candidates = torch.stack([
         all_elements[~torch.isin(all_elements, current_solution[b])]
         for b in torch.arange(repeat, device=device)
-    ])
+    ]).contiguous()
 
     # Set initial temperature
     temp = initial_temp

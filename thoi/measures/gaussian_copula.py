@@ -73,22 +73,24 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
     # |bz| x |N|
     single_var_dets = torch.diagonal(covmat, dim1=-2, dim2=-1)
     # |bz| x |N|
-    single_exclusion_dets = torch.stack([torch.linalg.det(covmat[:,ids][:,:,ids]) for ids in allmin1], dim=1)
+    single_exclusion_dets = torch.stack([
+        torch.linalg.det(covmat[:,ids].contiguous()[:,:,ids].contiguous())
+        for ids in allmin1
+    ], dim=1)
 
     # |bz|
     sys_ent = _gaussian_entropy_estimation(batch_det, n_variables) - bcN
-
     # This could be calculated once at the begining and then accessed here.
+    # |bz| x |N|
     var_ents = _gaussian_entropy_estimation(single_var_dets, 1) - bc1
     # |bz| x |N|
-    ent_min_one = _gaussian_entropy_estimation(single_exclusion_dets, n_variables-1) - bcNmin1
-    # |bz| x |N|
+    single_expclusion_ents = _gaussian_entropy_estimation(single_exclusion_dets, n_variables-1) - bcNmin1
 
     # |bz|
     nplet_tc = torch.sum(var_ents, dim=1) - sys_ent
     # TODO: inf - inf return NaN in pytorch. Check how should I handle this.
     # |bz|
-    nplet_dtc = torch.sum(ent_min_one, dim=1) - (n_variables-1.0)*sys_ent
+    nplet_dtc = torch.sum(single_expclusion_ents, dim=1) - (n_variables-1.0)*sys_ent
 
     # |bz|
     nplet_o = nplet_tc - nplet_dtc
@@ -133,8 +135,8 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     # Send elements to cuda if computing on GPU
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
-    covmat = covmat.to(device)
-    nplets = nplets.to(device)
+    covmat = covmat.to(device).contiguous()
+    nplets = nplets.to(device).contiguous()
 
     # Generate the covariance matrices for each nplet
     # |batch_size| x |order| x |order|

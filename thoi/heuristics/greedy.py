@@ -37,8 +37,8 @@ def greedy(X:np.ndarray, initial_order:int, max_order:int, repeat:int=10, use_cp
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
 
-    covmat = covmat.to(device)
-    current_solution = current_solution.to(device)
+    covmat = covmat.to(device).contiguous()
+    current_solution = current_solution.to(device).contiguous()
 
     best_scores = [gc_oinfo(covmat, T, current_solution)]
     for _ in trange(initial_order, max_order, leave=False, desc='Order'):
@@ -66,7 +66,7 @@ def next_order_greedy(covmat: torch.tensor,
     valid_candidates = torch.stack([
         all_elements[~torch.isin(all_elements, initial_solution[b])]
         for b in torch.arange(batch_size, device=device)
-    ])
+    ]).contiguous()
 
     # current_solution constructed by adding first element of valid_candidate to input solution
     current_solution = torch.cat((initial_solution, valid_candidates[:, [0]]) , dim=1)
