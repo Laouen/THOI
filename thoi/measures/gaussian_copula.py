@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from ..dataset import CovarianceDataset
 from ..collectors import batch_to_csv
 
+TWOPIE = torch.tensor(2 * torch.pi * torch.e)
 
 def gaussian_copula(X):
     """
@@ -54,7 +55,7 @@ def _gaussian_entropy_bias_correction(N,T):
 
 
 def _gaussian_entropy_estimation(cov_det, n_variables):
-    return 0.5 * torch.log(torch.tensor(2 * torch.pi * torch.e).pow(n_variables) * cov_det)
+    return 0.5 * (n_variables*torch.log(TWOPIE) + torch.log(cov_det))
 
 
 def _all_min_1_ids(n_variables):
@@ -223,7 +224,7 @@ def multi_order_measures(X: np.ndarray,
             dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=1,
+            num_workers=0, 
             pin_memory=using_GPU
         )
 

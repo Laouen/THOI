@@ -7,7 +7,7 @@ from thoi.measures.gaussian_copula import nplets_measures, gaussian_copula, mult
 from thoi.collectors import batch_to_tensor, concat_tensors
 
 
-def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
+def _gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
 
     """
         X (torch.tensor): The covariance matrix with shape (n_variables, n_variables)
@@ -21,7 +21,7 @@ def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
     return batched_res[:,2].flatten()
 
 
-def greedy(X:np.ndarray, initial_order:int, max_order:int, repeat:int=10, use_cpu:bool=False, batch_size:int=1000000):
+def greedy(X:np.ndarray, max_order:int, initial_order:int=3, repeat:int=10, use_cpu:bool=False, batch_size:int=1000000):
 
     current_solution = multi_order_measures(
         X, initial_order, initial_order, batch_size=batch_size, use_cpu=use_cpu,
@@ -40,7 +40,7 @@ def greedy(X:np.ndarray, initial_order:int, max_order:int, repeat:int=10, use_cp
     covmat = covmat.to(device).contiguous()
     current_solution = current_solution.to(device).contiguous()
 
-    best_scores = [gc_oinfo(covmat, T, current_solution)]
+    best_scores = [_gc_oinfo(covmat, T, current_solution)]
     for _ in trange(initial_order, max_order, leave=False, desc='Order'):
         best_candidate, best_score = next_order_greedy(covmat, T, current_solution)
         best_scores.append(best_score)
@@ -75,7 +75,7 @@ def next_order_greedy(covmat: torch.tensor,
     # |batch_size| x |order+1|
     best_candidates = valid_candidates[:, 0]
     # |batch_size|
-    best_score = gc_oinfo(covmat, T, current_solution)
+    best_score = _gc_oinfo(covmat, T, current_solution)
 
     # iterate candidate from 1 since candidate 0 is already in the initial best solution 
     for i_cand in trange(1,valid_candidates.shape[1], leave=False, desc=f'Candidates'):
@@ -86,7 +86,7 @@ def next_order_greedy(covmat: torch.tensor,
 
         # Calculate score of new solution
         # |batch_size|
-        new_score = gc_oinfo(covmat, T, current_solution)
+        new_score = _gc_oinfo(covmat, T, current_solution)
 
         # Determine if we should accept the new solution
         # |batch_size|

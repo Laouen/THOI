@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 from tqdm import trange
 import torch
@@ -34,14 +35,18 @@ def init_lower_order(X: np.ndarray, order:int, lower_order:int, repeat:int, use_
     # |repeat| x |order|
     return torch.cat((current_solution, valid_candidates) , dim=1).contiguous()
 
-def init_random(N:int, order:int, repeat:int, device:torch.device):
+def random_sampler(N:int, order:int, repeat:int, device:torch.device=None):
+
+    if device is None:
+        device = torch.device('cpu')
+
     return torch.stack([
         torch.randperm(N, device=device)[:order]
         for _ in range(repeat)
     ])
 
 
-def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
+def _gc_oinfo_energy(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
 
     """
         X (torch.tensor): The covariance matrix with shape (n_variables, n_variables)
@@ -50,11 +55,12 @@ def gc_oinfo(covmat: torch.tensor, T:int, batched_nplets: torch.tensor):
     # |batch_size| x |4 = (tc, dtc, o, s)|
     batched_res = nplets_measures(covmat, batched_nplets, T=T, covmat_precomputed=True)
     
-    # Return minus the o information score to make it an maximum optimization
+    # Return minus the o information score to make it an maximum optimization (energy)
     # |batch_size|
     return -batched_res[:,2].flatten()
 
 
+# TODO: add optimization value option as parameter
 def simulated_annealing(X: np.ndarray, 
                         order: int,
                         initial_temp:float=100.0,
@@ -62,8 +68,10 @@ def simulated_annealing(X: np.ndarray,
                         max_iterations:int=1000,
                         repeat:int=10,
                         use_cpu:bool=False,
-                        init_method:str='lower_order',
-                        lower_order:int=None):
+                        init_method:str='random', # lower_order, 'random', 'precumputed', 'precomputed_lower_order';
+                        lower_order:int=None,
+                        early_stop:int=100,
+                        current_solution: Optional[torch.tensor]=None):
 
     lower_order = order-1 if lower_order is None else lower_order
     assert init_method != 'lower_order' or lower_order < order, 'Init from optima lower order cannot start from a lower_order higher than the order to compute.' 
@@ -80,13 +88,14 @@ def simulated_annealing(X: np.ndarray,
     # Initialize random solution
     # |batch_size| x |order|
     if init_method == 'random':
-        current_solution = init_random(N, order, repeat, device)
-
+        current_solution = random_sampler(N, order, repeat, device)
     elif init_method == 'lower_order':
         current_solution = init_lower_order(X, order, lower_order, repeat, use_cpu, device)
+    elif init_method == 'precomputed':
+        assert current_solution is not None, 'current_solution must be a torch tensor'
 
     # |batch_size|
-    current_energy = gc_oinfo(covmat, T, current_solution)
+    current_energy = _gc_oinfo_energy(covmat, T, current_solution)
 
     # Initial valid candidates
     all_elements = torch.arange(N, device=device)
@@ -104,6 +113,7 @@ def simulated_annealing(X: np.ndarray,
     # |batch_size|
     best_energy = current_energy
 
+    no_progress_count = 0
     pbar = trange(max_iterations, leave=False)
     for _ in pbar:
 
@@ -122,10 +132,10 @@ def simulated_annealing(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = gc_oinfo(covmat, T, new_solution)
+        new_energy = _gc_oinfo_energy(covmat, T, new_solution)
 
         # Calculate change in energy
-        # delca_score > 0 means new_soce is bigger (more optimal) than current_score
+        # delca_energy > 0 means new_energy is bigger (more optimal) than current_energy
         # |batch_size|
         delta_energy = new_energy - current_energy
 
@@ -175,5 +185,15 @@ def simulated_annealing(X: np.ndarray,
 
         # Cool down
         temp *= cooling_rate
+
+        # Early stop
+        if torch.any(new_global_maxima):
+            no_progress_count = 0
+        else:
+            no_progress_count += 1
+        
+        if no_progress_count >= early_stop:
+            print('Early stop reached')
+            break
 
     return best_solution, best_energy
