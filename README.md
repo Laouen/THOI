@@ -1,5 +1,7 @@
 # THOI: Torch - Higher Order Interactions
 
+<img src="img/logo.png" alt="THOI Logo" width="200">
+
 ## Description
 
 THOI is a Python package designed to compute O information in Higher Order Interactions using batch processing. This package leverages PyTorch for efficient tensor operations.
