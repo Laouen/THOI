@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, List
 
 from tqdm.autonotebook import tqdm
 from functools import partial
@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from ..dataset import CovarianceDataset
+from ..dataset import CovarianceDataset, MultiCovarianceDataset
 from ..collectors import batch_to_csv
 
 TWOPIE = torch.tensor(2 * torch.pi * torch.e)
@@ -244,6 +244,109 @@ def multi_order_measures(X: np.ndarray,
                 nplets_dtc,
                 bn
             )
+            batched_data.append(data)
+
+    return batch_aggregation(batched_data)
+
+
+def _multi_order_measures(X: List[np.ndarray],
+                        min_order: int=3,
+                        max_order: Optional[int]=None,
+                        batch_size: int = 1000000,
+                        use_cpu: bool = False,
+                        batch_aggregation: Optional[Callable[[any],any]] = None,
+                        batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
+    """
+    Compute multi-order Gaussian Copula (GC) measurements for the given data matrix X.
+
+    Args:
+        X (np.ndarray): T samples x N variables matrix.
+        min_order (int): Minimum order to compute (default: 3).
+        max_order (Optional[int]): Maximum order to compute (default: None, will use N).
+        batch_size (int): Batch size for DataLoader (default: 1000000).
+        use_cpu (bool): If true, it forces to use CPU even if GPU is available (default: False).
+
+    Returns:
+        pd.DataFrame: DataFrame containing computed metrics.
+    """
+
+    assert len(set([x.shape for x in X])) == 1, 'All data must have same shape' 
+
+    n_datasets = len(X)
+
+    T, N = X[0].shape
+    max_order = N if max_order is None else max_order
+
+    if batch_aggregation is None:
+        batch_aggregation = lambda X: [pd.concat([x[i] for i in range(n_datasets)]) for x in X]
+
+    if batch_data_collector is None:
+        batch_data_collector = partial(batch_to_csv, N=N)
+
+    assert max_order <= N, f"max_order must be lower or equal than N. {max_order} > {N})"
+    assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
+
+    # make device cpu if not cuda available or cuda if available
+    using_GPU = torch.cuda.is_available() and not use_cpu
+    device = torch.device('cuda' if using_GPU else 'cpu')
+
+    # Gaussian Copula of data
+    covmats = [gaussian_copula(x)[1] for x in X]
+
+    # To compute using pytorch, we need to compute each order separately
+    batched_data = []
+    pbar_order = tqdm(range(min_order, max_order+1), leave=False, desc='Order', disable=(min_order==max_order))
+    for order in pbar_order:
+
+        # Calculate constant values valid for all n-plets of the current order
+        allmin1 = _all_min_1_ids(order)
+        bc1 = _gaussian_entropy_bias_correction(1,T)
+        bcN = _gaussian_entropy_bias_correction(order,T)
+        bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
+
+        # Generate dataset iterable
+        dataset = MultiCovarianceDataset(covmats, N, order)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0, 
+            pin_memory=using_GPU
+        )
+
+        # calculate measurments for each batch
+        pbar = tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')
+        for bn, (partition_idxs, partition_covmat) in enumerate(pbar):
+            
+            # |batch_size| x |n_datasets| x |order| x |order|
+            sub_covmats_flat = partition_covmat.view(batch_size * n_datasets, order, order)
+
+            sub_covmats_flat = sub_covmats_flat.to(device)
+            
+            nplets_tc, nplets_dtc, nplets_o, nplets_s = _get_tc_dtc_from_batched_covmat(
+                partition_covmat, allmin1, bc1, bcN, bcNmin1
+            )
+
+            # |batch_size| x |n_datasets|
+            nplets_tc_restored = nplets_tc.view(batch_size, n_datasets)
+            nplets_dtc_restored = nplets_dtc.view(batch_size, n_datasets)
+            nplets_o_restored = nplets_o.view(batch_size, n_datasets)
+            nplets_s_restored = nplets_s.view(batch_size, n_datasets)
+
+            # |n_datasets| x |batch_size|
+            nplets_tc_restored = torch.transpose(nplets_tc_restored, 0, 1)
+            nplets_dtc_restored = torch.transpose(nplets_dtc_restored, 0, 1)
+            nplets_o_restored = torch.transpose(nplets_o_restored, 0, 1)
+            nplets_s_restored = torch.transpose(nplets_s_restored, 0, 1)
+
+            data = [batch_data_collector(
+                partition_idxs[i],
+                nplets_o_restored[i],
+                nplets_s_restored[i],
+                nplets_tc_restored[i],
+                nplets_dtc_restored[i],
+                bn, i
+            ) for i in range(n_datasets)]
             batched_data.append(data)
 
     return batch_aggregation(batched_data)

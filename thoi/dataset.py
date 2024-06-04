@@ -1,3 +1,4 @@
+from typing import List
 from torch.utils.data import IterableDataset
 from itertools import combinations
 import math
@@ -25,10 +26,38 @@ class CovarianceDataset(IterableDataset):
                 - partition_covmat (np.ndarray): The submatrix of the covariance matrix corresponding to the current combination, shape (order, order).
         """
         for partition_idxs in self.partitions_generator:
+            # |order|
             partition_idxs = torch.tensor(partition_idxs)
+            # |order| x |order|
+            subcovmat = self.covmat[partition_idxs][:,partition_idxs]
 
-            # (order, order)
-            yield partition_idxs, self.covmat[partition_idxs][:,partition_idxs]
+            yield partition_idxs, subcovmat
+
+
+class MultiCovarianceDataset(IterableDataset):
+    def __init__(self, covmats: List[np.ndarray], n_variables: int, partition_order: int):
+        self.datasets = [CovarianceDataset(covmat, n_variables, partition_order) for covmat in covmats]
+
+    def __len__(self):
+        return len(self.datasets[0])
+
+    def __iter__(self):
+        
+        iterators = [iter(dataset) for dataset in self.datasets]
+        for _ in range(len(self)):
+            sub_covmats = []
+            all_partition_idxs = []
+            for it in iterators:
+                partition_idxs, sub_covmat = next(it)
+                sub_covmats.append(sub_covmat)
+                all_partition_idxs.append(partition_idxs)
+            
+            # |sub| x |order| x |order|
+            sub_covmats = torch.stack(sub_covmats)
+            # |sub| x |order|
+            all_partition_idxs = torch.stack(all_partition_idxs)
+
+            yield all_partition_idxs, sub_covmats
 
 
 class NpletsCovariancesDataset(IterableDataset):

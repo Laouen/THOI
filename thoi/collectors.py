@@ -9,6 +9,7 @@ def batch_to_csv(partition_idxs: np.ndarray,
                  nplets_tc: np.ndarray,
                  nplets_dtc: np.ndarray,
                  bn:int,
+                 dataset:int,
                  only_synergestic: bool=False,
                  columns: Optional[List[str]]=None,
                  N: Optional[int]=None,
@@ -55,7 +56,7 @@ def batch_to_csv(partition_idxs: np.ndarray,
     df = pd.concat([df_meas, df_vars], axis=1)
 
     if output_path is not None:
-        df.to_csv(output_path.format(order=order, bn=bn), index=False, sep=sep)
+        df.to_csv(output_path.format(order=order, bn=bn, dataset=dataset), index=False, sep=sep)
         return None # Don't return
 
     return df
