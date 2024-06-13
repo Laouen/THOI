@@ -103,7 +103,7 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
 
 def nplets_measures(X: Union[np.ndarray, torch.tensor],
                     nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
-                    T:int = None,
+                    T:Optional[int] = None,
                     covmat_precomputed:bool = False,
                     use_cpu:bool = False):
 
@@ -147,12 +147,18 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     ])
 
     # Compute measures
-    # Compute bias corrector
     _, order = nplets.shape
     allmin1 = _all_min_1_ids(order)
-    bc1 = _gaussian_entropy_bias_correction(1,T)
-    bcN = _gaussian_entropy_bias_correction(order,T)
-    bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
+    
+    # Compute bias corrector if from sampled data (T is not None)
+    if T is not None:
+        bc1 = _gaussian_entropy_bias_correction(1,T)
+        bcN = _gaussian_entropy_bias_correction(order,T)
+        bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
+    else: 
+        bc1 = 0
+        bcN = 0
+        bcNmin1 = 0
 
     # Batch process all nplets at once
     # batch_res = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
