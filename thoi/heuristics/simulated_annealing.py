@@ -8,7 +8,14 @@ from thoi.measures.gaussian_copula import gaussian_copula, multi_order_measures
 from thoi.collectors import batch_to_tensor, concat_tensors
 from thoi.heuristics.scoring import _evaluate_nplet
 
-def init_lower_order(X: np.ndarray, order:int, lower_order:int, repeat:int, metric:str, largest:bool, use_cpu:bool, device:torch.device):
+def init_lower_order(X: np.ndarray,
+                     order:int,
+                     lower_order:int,
+                     repeat:int,
+                     metric:str,
+                     largest:bool,
+                     use_cpu:bool,
+                     device:torch.device):
     N = X.shape[1]
 
     # |repeat| x |lower_order|
@@ -50,17 +57,17 @@ def random_sampler(N:int, order:int, repeat:int, device:torch.device=None):
 
 def simulated_annealing(X: np.ndarray, 
                         order: int,
-                        initial_temp:float=100.0,
-                        cooling_rate:float=0.99,
-                        max_iterations:int=1000,
-                        repeat:int=10,
-                        use_cpu:bool=False,
-                        init_method:str='random', # lower_order, 'random', 'precumputed', 'precomputed_lower_order';
-                        lower_order:int=None,
-                        early_stop:int=100,
-                        current_solution: Optional[torch.tensor]=None,
-                        metric:str='o', # tc, dtc, o, s
-                        largest:bool=False):
+                        initial_temp:float = 100.0,
+                        cooling_rate:float = 0.99,
+                        max_iterations:int = 1000,
+                        repeat:int = 10,
+                        use_cpu:bool = False,
+                        init_method:str = 'random', # lower_order, 'random', 'precumputed', 'precomputed_lower_order';
+                        lower_order:int = None,
+                        early_stop:int = 100,
+                        current_solution:Optional[torch.tensor] = None,
+                        metric:str = 'o', # tc, dtc, o, s
+                        largest:bool = False):
 
     lower_order = order-1 if lower_order is None else lower_order
     assert init_method != 'lower_order' or lower_order < order, 'Init from optima lower order cannot start from a lower_order higher than the order to compute.' 
@@ -86,7 +93,7 @@ def simulated_annealing(X: np.ndarray,
         assert current_solution is not None, 'current_solution must be a torch tensor'
 
     # |batch_size|
-    current_energy = _evaluate_nplet(covmat, T, current_solution, metric)
+    current_energy = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
 
     if not largest:
         current_energy = -current_energy
@@ -126,7 +133,7 @@ def simulated_annealing(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplet(covmat, T, new_solution, metric)
+        new_energy = _evaluate_nplet(covmat, T, new_solution, metric, use_cpu=use_cpu)
 
         if not largest:
             new_energy = -new_energy

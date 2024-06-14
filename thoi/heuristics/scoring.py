@@ -2,7 +2,7 @@ import torch
 from thoi.measures.gaussian_copula import nplets_measures
 
 
-def _evaluate_nplet(covmat: torch.tensor, T:int, batched_nplets: torch.tensor, metric:str):
+def _evaluate_nplet(covmat: torch.tensor, T:int, batched_nplets: torch.tensor, metric:str, use_cpu:bool=False):
 
     """
         X (torch.tensor): The covariance matrix with shape (n_variables, n_variables)
@@ -15,7 +15,7 @@ def _evaluate_nplet(covmat: torch.tensor, T:int, batched_nplets: torch.tensor, m
     metric_idx = METRICS.index(metric)
 
     # |batch_size| x |4 = (tc, dtc, o, s)|
-    batched_res = nplets_measures(covmat, batched_nplets, T=T, covmat_precomputed=True)
+    batched_res = nplets_measures(covmat, batched_nplets, T=T, covmat_precomputed=True, use_cpu=use_cpu)
 
     # Return minus the o information score to make it an maximum optimization (energy)
     # |batch_size|

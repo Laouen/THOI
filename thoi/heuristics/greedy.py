@@ -37,9 +37,12 @@ def greedy(X:np.ndarray,
     covmat = covmat.to(device).contiguous()
     current_solution = current_solution.to(device).contiguous()
 
-    best_scores = [_evaluate_nplet(covmat, T, current_solution, metric)]
+    best_scores = [_evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)]
     for _ in trange(initial_order, order, leave=False, desc='Order'):
-        best_candidate, best_score = next_order_greedy(covmat, T, current_solution, metric, min)
+        best_candidate, best_score = next_order_greedy(covmat, T, current_solution,
+                                                       metric=metric,
+                                                       largest=largest,
+                                                       use_cpu=use_cpu)
         best_scores.append(best_score)
 
         current_solution = torch.cat((current_solution, best_candidate.unsqueeze(1)) , dim=1)
@@ -52,7 +55,8 @@ def next_order_greedy(covmat: torch.tensor,
                       T: int,
                       initial_solution: torch.tensor,
                       metric:str='o',
-                      largest:bool=False):
+                      largest:bool=False,
+                      use_cpu:bool=False):
     
     assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
 
@@ -76,7 +80,7 @@ def next_order_greedy(covmat: torch.tensor,
     # |batch_size| x |order+1|
     best_candidates = valid_candidates[:, 0]
     # |batch_size|
-    best_score = _evaluate_nplet(covmat, T, current_solution, metric)
+    best_score = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
     
     if not largest:
         best_score = -best_score
@@ -90,9 +94,9 @@ def next_order_greedy(covmat: torch.tensor,
 
         # Calculate score of new solution
         # |batch_size|
-        new_score = _evaluate_nplet(covmat, T, current_solution, metric)
+        new_score = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
 
-        # if minimizing, then return score to optimizing
+        # if minimizing, then maximize the inverted score
         if not largest:
             new_score = -new_score
 
@@ -116,7 +120,7 @@ def next_order_greedy(covmat: torch.tensor,
             best_score
         )
     
-    # If minimizing, then return score to its real value
+    # If minimizing, then return score to its original sign
     if not largest:
         best_score = -best_score
 
