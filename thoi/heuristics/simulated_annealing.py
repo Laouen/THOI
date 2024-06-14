@@ -118,7 +118,7 @@ def simulated_annealing(X: np.ndarray,
     pbar = trange(max_iterations, leave=False)
     for _ in pbar:
 
-        pbar.set_description(f'mean(best_energy = {best_energy.mean()}')
+        pbar.set_description(f'mean({metric.upper()}) = {(1 if largest else -1) * best_energy.mean()}')
         
         # Generate new solution by modifying the current solution
         # |batch_size| x |order|
