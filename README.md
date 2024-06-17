@@ -1,6 +1,6 @@
 # THOI: Torch - Higher Order Interactions
 
-<img src="img/logo.png" alt="THOI Logo" width="200">
+<img src="https://raw.githubusercontent.com/Laouen/THOI/main/img/logo.png" alt="THOI Logo" width="200">
 
 ## Description
 
@@ -93,6 +93,28 @@ We welcome contributions from the community. If you encounter any issues or have
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use the `thoi` library in a scientific project, please cite it using one of the following formats:
+
+### BibTeX
+
+```bibtex
+@misc{thoi,
+  author       = {Laouen Belloli and Rubén Herzog},
+  title        = {THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing},
+  year         = {2024},
+  url          = {https://pypi.org/project/thoi/}
+}
+```
+
+**APA**
+Belloli, L., & Herzog, R. (2023). THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. Retrieved from https://pypi.org/project/thoi/
+
+**MLA**
+Belloli, Laouen, and Rubén Herzog. THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. 2023. Web. https://pypi.org/project/thoi/.
+
 
 ## Authors
 
