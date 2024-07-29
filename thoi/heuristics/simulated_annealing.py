@@ -44,7 +44,7 @@ def init_lower_order(X: np.ndarray,
     return torch.cat((current_solution, valid_candidates) , dim=1).contiguous()
 
 
-def random_sampler(N:int, order:int, repeat:int, device:torch.device=None):
+def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=None):
 
     if device is None:
         device = torch.device('cpu')
@@ -205,3 +205,4 @@ def simulated_annealing(X: np.ndarray,
         best_energy = -best_energy
 
     return best_solution, best_energy
+
