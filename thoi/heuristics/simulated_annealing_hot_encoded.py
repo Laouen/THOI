@@ -4,57 +4,10 @@ from tqdm import trange
 import torch
 
 from thoi.measures.utils import gaussian_copula
-from thoi.heuristics.scoring import _evaluate_nplet
+from thoi.heuristics.scoring import _evaluate_nplet_hot_encoded
 
 
-def reorder_by_hot_sum(current_solutions):
-    # Calculate the sum of each vector
-    sums = current_solutions.sum(dim=1)
-    
-    # Get the sorted indices based on the sums
-    sorted_indices = torch.argsort(sums)
-    
-    # Reorder the current_solutions based on the sorted indices
-    reordered_solutions = current_solutions[sorted_indices]
-    reordered_sums = sums[sorted_indices]
-    
-    return reordered_solutions, reordered_sums, sorted_indices
-
-
-def split_by_hot_size(current_solution):
-    reordered_solutions, reordered_sums, sorted_indices = reorder_by_hot_sum(current_solution)
-
-    # Find unique sums and their counts
-    unique_sums, counts = torch.unique(reordered_sums, return_counts=True)
-    
-    split_solutions = []
-    start_idx = 0
-    for count in counts:
-        split_solutions.append(reordered_solutions[start_idx:start_idx + count])
-        start_idx += count
-    
-    return split_solutions, sorted_indices
-
-
-def _evaluate_nplet_by_size(covmat: torch.tensor, T:int, batched_nplets: torch.tensor, metric:str, use_cpu:bool=False):
-    split_nplets, sorted_indices = split_by_hot_size(batched_nplets)
-    
-    # Evaluate the splits
-    evaluated_splits = torch.cat([
-        _evaluate_nplet(covmat, T, nplets, metric, use_cpu)
-        for nplets in split_nplets
-    ])
-    
-    # Create a tensor to hold the results in the original order
-    results = torch.zeros_like(evaluated_splits)
-    
-    # Place the evaluated scores back into the original positions
-    results[sorted_indices] = evaluated_splits
-    
-    return results
-
-
-def simulated_annealing_cross_order(X: np.ndarray,
+def simulated_annealing_hot_encoded(X: np.ndarray,
                                     initial_temp: float = 100.0,
                                     cooling_rate: float = 0.99,
                                     max_iterations: int = 1000,
@@ -80,7 +33,7 @@ def simulated_annealing_cross_order(X: np.ndarray,
     current_solution = torch.randint(0, 2, (repeat, N), device=device)
 
     # |batch_size|
-    current_energy = _evaluate_nplet_by_size(covmat, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplet_hot_encoded(covmat, T, current_solution, metric, use_cpu=use_cpu)
 
     if not largest:
         current_energy = -current_energy
@@ -109,7 +62,7 @@ def simulated_annealing_cross_order(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplet_by_size(covmat, T, current_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplet_hot_encoded(covmat, T, current_solution, metric, use_cpu=use_cpu)
 
         if not largest:
             new_energy = -new_energy

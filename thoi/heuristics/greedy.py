@@ -1,9 +1,10 @@
 import numpy as np
+from thoi.measures.utils import gaussian_copula
 from tqdm import trange
 import torch
 from functools import partial
 
-from thoi.measures.gaussian_copula import gaussian_copula, multi_order_measures
+from thoi.measures.gaussian_copula import multi_order_measures
 from thoi.collectors import batch_to_tensor, concat_tensors
 from thoi.heuristics.scoring import _evaluate_nplet
 
