@@ -78,10 +78,8 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     if not torch.is_tensor(nplets):
         nplets = torch.tensor(nplets)
 
-    # If only nplet to calculate
-    if len(nplets.shape) < 2:
-        nplets = torch.unsqueeze(nplets, dim=0)
-
+    # nplets must be a batched tensor
+    assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
 
     # Process in correct device
     # Send elements to cuda if computing on GPU
@@ -116,10 +114,6 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     results = torch.stack(_get_tc_dtc_from_batched_covmat(
         nplets_covmat, allmin1, bc1, bcN, bcNmin1
     )).T
-
-    # If only one result, return is as value not list
-    if results.shape[0] == 1:
-        results = torch.squeeze(results, dim=0)
 
     return results
     
