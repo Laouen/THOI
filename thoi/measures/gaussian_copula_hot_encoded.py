@@ -114,10 +114,10 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
             bias_correctors = torch.tensor([
                 _gaussian_entropy_bias_correction(order,T)
                 for order in range(1,N+1)
-            ])
+            ], device=device)
             
         else: 
-            bias_correctors = torch.zeros(N)
+            bias_correctors = torch.zeros(N, device=device)
 
     bc1 = bias_correctors[0]
     bcN = bias_correctors[orders-1]

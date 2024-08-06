@@ -80,6 +80,7 @@ def simulated_annealing_multi_order(X: np.ndarray,
                                     initial_temp: float = 100.0,
                                     cooling_rate: float = 0.99,
                                     max_iterations: int = 1000,
+                                    step_size: int = 1,
                                     repeat: int = 10,
                                     use_cpu: bool = False,
                                     early_stop: int = 100,
@@ -100,6 +101,8 @@ def simulated_annealing_multi_order(X: np.ndarray,
     device = torch.device('cuda' if using_GPU else 'cpu')
 
     T, N = X.shape
+
+    i_repeat = torch.arange(repeat).unsqueeze(1).expand(-1, step_size)
 
     covmat = torch.tensor(gaussian_copula(X)[1])
     covmat = covmat.to(device).contiguous()
@@ -131,10 +134,12 @@ def simulated_annealing_multi_order(X: np.ndarray,
         
         
         # |batch_size|
-        i_change = torch.randint(0, N, (repeat,), device=device)
+        #i_change = torch.randint(0, N, (repeat,), device=device)
+        i_change = torch.stack([torch.randperm(N, device=device)[:step_size] for _ in range(repeat)])
+        
 
         # Change values of selected elements
-        current_solution[torch.arange(repeat), i_change] = 1 - current_solution[torch.arange(repeat), i_change]
+        current_solution[i_repeat, i_change] = 1 - current_solution[i_repeat, i_change]
 
         # Calculate energy of new solution
         # |batch_size|
@@ -159,7 +164,7 @@ def simulated_annealing_multi_order(X: np.ndarray,
         accept_new_solution = torch.logical_and(accept_new_solution, valid_solutions)
 
         # revert changes of not accepted solutions in the rows of the mask accept_new_solution and in the indexes of i_change
-        current_solution[~accept_new_solution, i_change[~accept_new_solution]] = 1 - current_solution[~accept_new_solution, i_change[~accept_new_solution]]
+        current_solution[i_repeat[~accept_new_solution], i_change[~accept_new_solution]] = 1 - current_solution[i_repeat[~accept_new_solution], i_change[~accept_new_solution]]
 
         # |batch_size|
         current_energy[accept_new_solution] = new_energy[accept_new_solution]
