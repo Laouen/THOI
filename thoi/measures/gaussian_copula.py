@@ -118,28 +118,48 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor],
     return results
     
 
-def multi_order_measures(X: np.ndarray,
-                        min_order: int=3,
-                        max_order: Optional[int]=None,
-                        batch_size: int = 1000000,
-                        use_cpu: bool = False,
-                        batch_aggregation: Optional[Callable[[any],any]] = None,
-                        batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
+def multi_order_measures(X: Union[np.ndarray, torch.tensor],
+                         covmat_precomputed: bool=False,
+                         T: Optional[int]=None,
+                         min_order: int=3,
+                         max_order: Optional[int]=None,
+                         batch_size: int = 1000000,
+                         use_cpu: bool = False,
+                         batch_aggregation: Optional[Callable[[any],any]] = None,
+                         batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
     """
     Compute multi-order Gaussian Copula (GC) measurements for the given data matrix X.
+    The measurements computed are:
+        * Total Correlation (TC)
+        * Dual Total Correlation (DTC)
+        * O-information (O)
+        * S-information (S)
 
     Args:
-        X (np.ndarray): T samples x N variables matrix.
+        X (np.ndarray or torch.tensor): T samples x N variables matrix. if not covmat_precomputed, it should be a numpy array.
+        covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
+        T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
         min_order (int): Minimum order to compute (default: 3).
         max_order (Optional[int]): Maximum order to compute (default: None, will use N).
         batch_size (int): Batch size for DataLoader (default: 1000000).
         use_cpu (bool): If true, it forces to use CPU even if GPU is available (default: False).
+        batch_aggregation (Optional[Callable[[any],any]]): Function to aggregate the batched data (default: pd.concat).
+        batch_data_collector (Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]]): Function to collect the batched data (default: batch_to_csv).
 
     Returns:
         pd.DataFrame: DataFrame containing computed metrics.
     """
 
-    T, N = X.shape
+    # Handle different options for X parameter. Accept multivariate data or covariance matrix
+    if covmat_precomputed:
+        N1, N = X.shape
+        assert N1 == N, 'Covariance matrix should be a squared matrix'
+        covmat = X
+    else:
+        assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
+        T, N = X.shape
+        covmat = gaussian_copula(X)[1]
+
     max_order = N if max_order is None else max_order
 
     if batch_aggregation is None:
@@ -155,9 +175,6 @@ def multi_order_measures(X: np.ndarray,
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
 
-    # Gaussian Copula of data
-    covmat = gaussian_copula(X)[1]
-
     # To compute using pytorch, we need to compute each order separately
     batched_data = []
     pbar_order = tqdm(range(min_order, max_order+1), leave=False, desc='Order', disable=(min_order==max_order))
@@ -165,9 +182,14 @@ def multi_order_measures(X: np.ndarray,
 
         # Calculate constant values valid for all n-plets of the current order
         allmin1 = _all_min_1_ids(order)
-        bc1 = _gaussian_entropy_bias_correction(1,T)
-        bcN = _gaussian_entropy_bias_correction(order,T)
-        bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
+        if T is not None:
+            bc1 = _gaussian_entropy_bias_correction(1,T)
+            bcN = _gaussian_entropy_bias_correction(order,T)
+            bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
+        else:
+            bc1 = 0
+            bcN = 0
+            bcNmin1 = 0
 
         # Generate dataset iterable
         dataset = CovarianceDataset(covmat, N, order)

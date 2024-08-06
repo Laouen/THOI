@@ -54,6 +54,9 @@ def batch_to_csv(partition_idxs: np.ndarray,
     # Concat both dataframes columns and store in disk
     df = pd.concat([df_meas, df_vars], axis=1)
 
+    # Compute a column with the order
+    df['order'] = df[columns].sum(axis=1)
+
     if output_path is not None:
         df.to_csv(output_path.format(order=order, bn=bn), index=False, sep=sep)
         return None # Don't return

@@ -1,3 +1,4 @@
+from typing import Union
 from torch.utils.data import IterableDataset
 from itertools import combinations
 import math
@@ -5,7 +6,11 @@ import numpy as np
 import torch
 
 class CovarianceDataset(IterableDataset):
-    def __init__(self, covmat: np.ndarray, n_variables: int, partition_order: int):
+    def __init__(self,
+                 covmat: Union[np.ndarray, torch.tensor],
+                 n_variables: int,
+                 partition_order: int):
+
         self.covmat = torch.tensor(covmat).contiguous()
         self.n_variables = n_variables
         self.partition_order = partition_order
