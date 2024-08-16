@@ -22,7 +22,7 @@ def greedy(X:np.ndarray,
     assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
 
     current_solution = multi_order_measures(
-        X, initial_order, initial_order, batch_size=batch_size, use_cpu=use_cpu,
+        X, min_order=initial_order, max_order=initial_order, batch_size=batch_size, use_cpu=use_cpu,
         batch_data_collector=partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest),
         batch_aggregation=partial(concat_tensors, top_k=repeat, metric=metric, largest=largest)
     )[-1]
