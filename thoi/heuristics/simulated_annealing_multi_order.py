@@ -122,15 +122,15 @@ def simulated_annealing_multi_order(X: np.ndarray,
 
     # Best solution found
     # |batch_size| x |order|
-    best_solution = current_solution
+    best_solution = current_solution.clone()
     # |batch_size|
-    best_energy = current_energy
+    best_energy = current_energy.clone()
 
     no_progress_count = 0
-    pbar = trange(max_iterations, leave=False)
+    pbar = trange(max_iterations, leave=True)
     for _ in pbar:
 
-        pbar.set_description(f'mean({metric.upper()}) = {(1 if largest else -1) * best_energy.mean()}')
+        pbar.set_description(f'mean({metric.upper()}) = {(1 if largest else -1) * best_energy.mean()} - ES: {no_progress_count}')
         
         
         # |batch_size|
