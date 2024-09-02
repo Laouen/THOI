@@ -36,13 +36,13 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor, allmin1, bc1: float, b
     # |bz| x |N|
     var_ents = _gaussian_entropy_estimation(single_var_dets, 1) - bc1
     # |bz| x |N|
-    single_expclusion_ents = _gaussian_entropy_estimation(single_exclusion_dets, n_variables-1) - bcNmin1
+    single_exclusion_ents = _gaussian_entropy_estimation(single_exclusion_dets, n_variables-1) - bcNmin1
 
     # |bz|
     nplet_tc = torch.sum(var_ents, dim=1) - sys_ent
     # TODO: inf - inf return NaN in pytorch. Check how should I handle this.
     # |bz|
-    nplet_dtc = torch.sum(single_expclusion_ents, dim=1) - (n_variables-1.0)*sys_ent
+    nplet_dtc = torch.sum(single_exclusion_ents, dim=1) - (n_variables-1.0)*sys_ent
 
     # |bz|
     nplet_o = nplet_tc - nplet_dtc
@@ -192,7 +192,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor],
             bcNmin1 = 0
 
         # Generate dataset iterable
-        dataset = CovarianceDataset(covmat, N, order)
+        dataset = CovarianceDataset(covmat, order)
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
