@@ -3,16 +3,17 @@ import pandas as pd
 import numpy as np
 import torch
 
-def batch_to_csv(partition_idxs: np.ndarray,
-                 nplets_o: np.ndarray,
-                 nplets_s: np.ndarray,
-                 nplets_tc: np.ndarray,
-                 nplets_dtc: np.ndarray,
+def batch_to_csv(partition_idxs: torch.Tensor,
+                 nplets_o: torch.Tensor,
+                 nplets_s: torch.Tensor,
+                 nplets_tc: torch.Tensor,
+                 nplets_dtc: torch.Tensor,
                  bn:int,
                  only_synergestic: bool=False,
                  columns: Optional[List[str]]=None,
                  N: Optional[int]=None,
                  sep: str='\t',
+                 indexing_method: str='indexes', # indexes or hot_encoded
                  output_path: Optional[str]=None):
     
     assert columns is not None or N is not None, 'either columns or N must be defined'
@@ -44,11 +45,13 @@ def batch_to_csv(partition_idxs: np.ndarray,
     })
 
     # Create a DataFrame with the n-plets
-    partition_idxs = partition_idxs
-    batch_size, order = partition_idxs.shape
-    bool_array = np.zeros((batch_size, N), dtype=bool)
-    rows = np.arange(batch_size).reshape(-1, 1)
-    bool_array[rows, partition_idxs] = True
+    if indexing_method == 'indexes':
+        batch_size, order = partition_idxs.shape
+        bool_array = np.zeros((batch_size, N), dtype=bool)
+        rows = np.arange(batch_size).reshape(-1, 1)
+        bool_array[rows, partition_idxs] = True
+    else:
+        bool_array = partition_idxs.bool().cpu().numpy()
     df_vars = pd.DataFrame(bool_array, columns=columns)
 
     # Concat both dataframes columns and store in disk
