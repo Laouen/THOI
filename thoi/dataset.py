@@ -7,17 +7,19 @@ import torch
 
 class CovarianceDataset(IterableDataset):
     def __init__(self,
-                 covmat: Union[np.ndarray, torch.tensor],
+                 covmat: torch.tensor,
                  partition_order: int):
+        
+        assert len(covmat.shape) == 3, 'The covariance matrix must be 3D. (n_data, n_variables, n_variables)'
 
-        self.covmat = torch.tensor(covmat).contiguous()
-        self.n_variables = self.covmat.shape[0]
+        self.covmats = covmat.contiguous()
+        self.n_variables = self.covmats.shape[1]
         self.partition_order = partition_order
         self.partitions_generator = combinations(range(self.n_variables), self.partition_order)
 
     def __len__(self):
         """Returns the number of combinations of features of the specified order."""
-        return math.comb(self.n_variables, self.partition_order)
+        return self.covmats.shape[0] * math.comb(self.n_variables, self.partition_order)
 
     def __iter__(self):
         """
@@ -31,8 +33,8 @@ class CovarianceDataset(IterableDataset):
         for partition_idxs in self.partitions_generator:
             partition_idxs = torch.tensor(partition_idxs)
 
-            # (order, order)
-            yield partition_idxs, self.covmat[partition_idxs][:,partition_idxs]
+            # (|order|, |n_covmats x order|)
+            yield partition_idxs, torch.stack([covmat[partition_idxs][:,partition_idxs] for covmat in self.covmats])
 
 
 class HotEncodedMultiOrderDataset(IterableDataset):

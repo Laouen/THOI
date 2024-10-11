@@ -8,7 +8,7 @@ def _all_min_1_ids(n_variables):
     return [np.setdiff1d(range(n_variables),x) for x in range(n_variables)]
 
 
-def gaussian_copula(X):
+def gaussian_copula(X: np.ndarray):
     """
     Transform the data into a Gaussian copula and compute the covariance matrix.
 
@@ -45,8 +45,18 @@ def _gaussian_entropy_bias_correction(N,T):
     """Computes the bias of the entropy estimator of a 
     N-dimensional multivariate gaussian with T sample"""
     psiterms = sp.special.psi((T - np.arange(1,N+1))/2)
-    return (N*np.log(2/(T-1)) + np.sum(psiterms))/2
+    return torch.tensor((N*np.log(2/(T-1)) + np.sum(psiterms))/2)
 
 
 def _gaussian_entropy_estimation(cov_det, n_variables):
     return 0.5 * (n_variables*torch.log(TWOPIE) + torch.log(cov_det))
+
+
+def to_numpy(X):
+    if isinstance(X, torch.Tensor):
+        # If the tensor is on a GPU/TPU, move it to CPU first, then convert to NumPy
+        return X.detach().cpu().numpy()
+    elif isinstance(X, np.ndarray):
+        return X
+    else:
+        raise TypeError(f"Unsupported type: {type(X)}")
