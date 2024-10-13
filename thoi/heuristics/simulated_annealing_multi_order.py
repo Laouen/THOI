@@ -2,8 +2,8 @@ import numpy as np
 from tqdm import trange
 import torch
 
-from thoi.measures.utils import gaussian_copula
-from thoi.heuristics.scoring import _evaluate_nplet, _evaluate_nplet_hot_encoded
+from thoi.commons import gaussian_copula
+from thoi.heuristics.scoring import _evaluate_nplets, _evaluate_nplet_hot_encoded
 
 def _random_solutions(repeat, N, device):
     # Create a tensor of random 0s and 1s
@@ -63,7 +63,7 @@ def _evaluate_nplet_by_size(covmat: torch.tensor, T:int, batched_nplets: torch.t
     
     # Evaluate the splits
     evaluated_splits = torch.cat([
-        _evaluate_nplet(covmat, T, nplets, metric, use_cpu)
+        _evaluate_nplets(covmat, T, nplets, metric, use_cpu)
         for nplets in split_nplets
     ])
     

@@ -1,44 +1,16 @@
+from typing import List, Union, Optional
 import numpy as np
 import scipy as sp
 import torch
+
 from thoi.measures.constants import TWOPIE
 
 
-def _all_min_1_ids(n_variables):
-    return [np.setdiff1d(range(n_variables),x) for x in range(n_variables)]
-
-
-def gaussian_copula(X: np.ndarray):
-    """
-    Transform the data into a Gaussian copula and compute the covariance matrix.
-
-    Parameters:
-    - X: A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
-
-    Returns:
-    - X_gaussian: The data transformed into the Gaussian copula (same shape as the parameter input).
-    - X_gaussian_covmat: The covariance matrix of the Gaussian copula transformed data.
-    """
-
-    assert X.ndim == 2, f'data must be 2D but got {X.ndim}D data input'
-
-    T = X.shape[0]
-
-    # Step 1 & 2: Rank the data and normalize the ranks
-    sortid = np.argsort(X, axis=0) # sorting indices
-    copdata = np.argsort(sortid, axis=0) # sorting sorting indices
-    copdata = (copdata+1)/(T+1) # normalized indices in the [0,1] range 
-
-    # Step 3: Apply the inverse CDF of the standard normal distribution
-    X_gaussian = sp.special.ndtri(copdata) #uniform data to gaussian
-
-    # Handle infinite values by setting them to 0 (optional and depends on use case)
-    X_gaussian[np.isinf(X_gaussian)] = 0
-
-    # Step 4: Compute the covariance matrix
-    X_gaussian_covmat = np.cov(X_gaussian.T)
-
-    return X_gaussian, X_gaussian_covmat
+def _all_min_1_ids(N, device=torch.device('cpu')):
+    base_tensor = torch.arange(N, device=device).unsqueeze(0).repeat(N, 1)  # Shape: (N, N)
+    mask = base_tensor != torch.arange(N, device=device).unsqueeze(1)  # Shape: (N, N)
+    result = base_tensor[mask].view(N, N - 1)  # Shape: (N, N-1)
+    return result
 
 
 def _gaussian_entropy_bias_correction(N,T):
@@ -52,11 +24,21 @@ def _gaussian_entropy_estimation(cov_det, n_variables):
     return 0.5 * (n_variables*torch.log(TWOPIE) + torch.log(cov_det))
 
 
-def to_numpy(X):
-    if isinstance(X, torch.Tensor):
-        # If the tensor is on a GPU/TPU, move it to CPU first, then convert to NumPy
-        return X.detach().cpu().numpy()
-    elif isinstance(X, np.ndarray):
-        return X
+def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
+    if T is not None:
+        bc1 = torch.tensor([_gaussian_entropy_bias_correction(1,t) for t in T], device=device)
+        bcN = torch.tensor([_gaussian_entropy_bias_correction(order,t) for t in T], device=device)
+        bcNmin1 = torch.tensor([_gaussian_entropy_bias_correction(order-1,t) for t in T], device=device)
     else:
-        raise TypeError(f"Unsupported type: {type(X)}")
+        bc1 = torch.tensor([0] * D, device=device)
+        bcN = torch.tensor([0] * D, device=device)
+        bcNmin1 = torch.tensor([0] * D, device=device)
+
+    # Make bc1 a tensor with [*bc1, *bc1, ...] bach_size times to broadcast with the batched data
+    bc1 = bc1.repeat(batch_size)
+    bcN = bcN.repeat(batch_size)
+    bcNmin1 = bcNmin1.repeat(batch_size)
+
+    return bc1, bcN, bcNmin1
+
+

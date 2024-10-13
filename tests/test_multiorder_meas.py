@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 
-from thoi.measures.gaussian_copula import multi_order_measures, gaussian_copula
+from thoi.measures.gaussian_copula import multi_order_measures
+from thoi.commons import gaussian_copula
 
 class TestMultiOrderMeasures(unittest.TestCase):
 

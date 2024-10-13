@@ -1,69 +1,97 @@
-import numpy as np
-from thoi.measures.utils import gaussian_copula
+from typing import Union, Callable, List, Optional
 from tqdm import trange
+
+import numpy as np
 import torch
 from functools import partial
 
 from thoi.measures.gaussian_copula import multi_order_measures
-from thoi.collectors import batch_to_tensor, concat_tensors
-from thoi.heuristics.scoring import _evaluate_nplet
+from thoi.collectors import batch_to_tensor, concat_batched_tensors
+from thoi.heuristics.scoring import _evaluate_nplets
+from thoi.commons import _normalize_input_data
 
 
-def greedy(X:np.ndarray,
-           order:int,
-           initial_order:int=3,
-           repeat:int=10,
-           use_cpu:bool=False,
-           batch_size:int=1000000,
-           metric:str='o',
-           largest:bool=False):
+def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+           covmat_precomputed: bool=False,
+           T: Optional[Union[int, List[int]]]=None,
+           initial_order: int=3,
+           order: Optional[int]=None,
+           repeat: int=10,
+           use_cpu: bool=False,
+           batch_size: int=1000000,
+           metric: Union[str,Callable]='o',
+           largest: bool=False):
+    
+    '''
+    Brief: Greedy algorithm to find the best order of nplets to maximize the metric for a given multivariate series or covariance matrices
+    
+    Parameters:
+    - X (Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+    - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
+    - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
+    '''
+    
+    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
 
+    # Compute initial solutions
+    batch_data_collector = partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest)
+    batch_aggregation = partial(concat_batched_tensors, top_k=repeat, metric=metric, largest=largest)
 
-    assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
+    # |repeat| x |initial_order|
+    _, current_solution = multi_order_measures(covmats,
+                                               covmat_precomputed=True,
+                                               T=T,
+                                               min_order=initial_order,
+                                               max_order=initial_order,
+                                               batch_size=batch_size,
+                                               use_cpu=use_cpu,
+                                               batch_data_collector=batch_data_collector,
+                                               batch_aggregation=batch_aggregation)
 
-    current_solution = multi_order_measures(
-        X, min_order=initial_order, max_order=initial_order, batch_size=batch_size, use_cpu=use_cpu,
-        batch_data_collector=partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest),
-        batch_aggregation=partial(concat_tensors, top_k=repeat, metric=metric, largest=largest)
-    )[-1]
-
-    T, N = X.shape
-
-    covmat = torch.tensor(gaussian_copula(X)[1])
-
-    # Make device cpu if not cuda available or cuda if available
-    using_GPU = torch.cuda.is_available() and not use_cpu
-    device = torch.device('cuda' if using_GPU else 'cpu')
-
-    covmat = covmat.to(device).contiguous()
+    # Send elements to cuda if computing on GPU
+    covmats = covmats.to(device).contiguous()
     current_solution = current_solution.to(device).contiguous()
 
-    best_scores = [_evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)]
+    # Iterate over the remaining orders to get the best solution for each order
+    best_scores = [_evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)]
     for _ in trange(initial_order, order, leave=False, desc='Order'):
-        best_candidate, best_score = next_order_greedy(covmat, T, current_solution,
+        best_candidate, best_score = _next_order_greedy(covmats, T, current_solution,
                                                        metric=metric,
                                                        largest=largest,
                                                        use_cpu=use_cpu)
         best_scores.append(best_score)
 
         current_solution = torch.cat((current_solution, best_candidate.unsqueeze(1)) , dim=1)
-
     
     return current_solution, torch.stack(best_scores).T
 
 
-def next_order_greedy(covmat: torch.tensor,
-                      T: int,
+def _next_order_greedy(covmats: torch.tensor,
+                      T: Optional[List[int]],
                       initial_solution: torch.tensor,
-                      metric:str='o',
-                      largest:bool=False,
-                      use_cpu:bool=False):
+                      metric:Union[str,Callable],
+                      largest:bool,
+                      use_cpu:bool):
     
-    assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
+    '''
+    Brief: Greedy algorithm to find the best candidate to add to the current solution
+    
+    Parameters:
+    - covmats (torch.tensor): The covariance matrix or matrixes with shape (D, N, N)
+    - T (List[int]): The number of samples for each multivariate series
+    - initial_solution (torch.tensor): The initial solution with shape (batch_size, order)
+    - metric (Union[str,Callable]): The metric to evaluate. One of tc, dtc, o, s or a callable function
+    - largest (bool): A flag to indicate if the metric is to be maximized or minimized
+    - use_cpu (bool): A flag to indicate if the computation should be done on the CPU
+    
+    Returns:
+    - best_candidates (torch.tensor): The best candidates to add to the current solution with shape (batch_size)
+    - best_score (torch.tensor): The best score for the best candidates with shape (batch_size)
+    '''
 
     # Get parameters attributes
-    device = covmat.device
-    N = covmat.shape[0]
+    device = covmats.device
+    N = covmats.shape[1]
     batch_size = initial_solution.shape[0]
 
     # Initial valid candidates to iterate one by one
@@ -80,8 +108,9 @@ def next_order_greedy(covmat: torch.tensor,
     # Start best solution first_candidate
     # |batch_size| x |order+1|
     best_candidates = valid_candidates[:, 0]
+    
     # |batch_size|
-    best_score = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
+    best_score = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
     
     if not largest:
         best_score = -best_score
@@ -93,9 +122,9 @@ def next_order_greedy(covmat: torch.tensor,
         current_candidates = valid_candidates[:, i_cand]
         current_solution[:, -1] = current_candidates
 
-        # Calculate score of new solution
+        # Calculate score of new solutions
         # |batch_size|
-        new_score = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
+        new_score = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
 
         # if minimizing, then maximize the inverted score
         if not largest:

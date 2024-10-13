@@ -1,5 +1,6 @@
 from typing import Optional, List, Callable, Union
 
+from thoi.commons import gaussian_copula
 from tqdm.autonotebook import tqdm
 from functools import partial
 
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from thoi.dataset import HotEncodedMultiOrderDataset
 from thoi.collectors import batch_to_csv
-from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_bias_correction, _gaussian_entropy_estimation, gaussian_copula
+from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_bias_correction, _gaussian_entropy_estimation
 from thoi.measures.constants import GAUS_ENTR_NORMAL
 
 
@@ -79,7 +80,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
     if covmat_precomputed:
         N1, N = X.shape
         assert N1 == N, 'Covariance matrix should be a squared matrix'
-        covmat = X if torch.is_tensor(X) else torch.tensor(X)
+        covmat = torch.as_tensor(X)
     else:
         assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
         T, N = X.shape
@@ -91,8 +92,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
         nplets = torch.ones(N)
 
     # If nplets are not tensors, convert to tensor
-    if not torch.is_tensor(nplets):
-        nplets = torch.tensor(nplets)
+    nplets = torch.as_tensor(nplets)
 
     # If only nplet to calculate
     if len(nplets.shape) < 2:
@@ -255,10 +255,10 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
         
         data = batch_data_collector(
             partition_idxs_hot_encoded,
-            nplets_o,
-            nplets_s,
             nplets_tc,
             nplets_dtc,
+            nplets_o,
+            nplets_s,
             bn
         )
         batched_data.append(data)

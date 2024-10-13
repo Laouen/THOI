@@ -3,17 +3,17 @@ from typing import Optional, Callable, Union, List
 from tqdm.autonotebook import tqdm
 from functools import partial
 
-import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from thoi.commons import _normalize_input_data
 from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
-from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_bias_correction, _gaussian_entropy_estimation, gaussian_copula, to_numpy
+from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _get_bias_correctors
 
-# TODO: make allmin1 a torch tensor as well
-def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: List[np.ndarray], bc1: torch.tensor, bcN: torch.tensor, bcNmin1: torch.tensor):
+
+def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor, bc1: torch.tensor, bcN: torch.tensor, bcNmin1: torch.tensor):
 
     # covmat is a batch of covariance matrices
     # |bz| x |N| x |N|
@@ -52,80 +52,92 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: List[np.ndar
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 
-def nplets_measures(X: Union[np.ndarray, torch.tensor],
+def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+                    covmat_precomputed: bool = False,
+                    T: Optional[Union[int, List[int]]] = None,
                     nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
-                    T:Optional[int] = None,
-                    covmat_precomputed:bool = False,
-                    use_cpu:bool = False):
-
-    # check the number of dimensions of X
-    assert len(X.shape) <= 3, 'X must be a 2D or 3D matrix'
-
-    if len(X.shape) == 2:
-        # add a single dimension to the data
-        X = X.unsqueeze(0) if torch.is_tensor(X) else np.expand_dims(X, axis=0)
-
-    # Handle different options for X parameter
-    # Accept multivariate data or covariance matrix
-    if covmat_precomputed:
-        _, N1, N = X.shape
-        assert N1 == N, 'Precomputed covariance matrix should be a squared matrix'
-        covmats = X if torch.is_tensor(X) else torch.tensor(X)
-    else:
-        _, T, N = X.shape
-        covmats = torch.tensor([
-            gaussian_copula(X_i)[1]
-            for X_i in to_numpy(X)
-        ])
-
-    # Handle different options for nplet parameter
-    # Compute for the entire systems
-    if nplets is None:
-        nplets = torch.arange(N).unsqueeze(0)
-
-    # If nplets are not tensors, convert to tensor
-    if not torch.is_tensor(nplets):
-        nplets = torch.tensor(nplets)
-
+                    use_cpu: bool = False):
+    
+    '''
+    Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
+    
+    Parameters:
+    - X (Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+    - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
+    - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
+    - nplets (Optional[Union[np.ndarray,torch.tensor]]): The nplets to calculate the measures with shape (batch_size, order)
+    - use_cpu (bool): A boolean flag to indicate if the computation should be done on the CPU.
+    
+    Returns:
+    - torch.tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
+    '''
+    
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
-
-    # Process in correct device
-    # Send elements to cuda if computing on GPU
-    using_GPU = torch.cuda.is_available() and not use_cpu
-    device = torch.device('cuda' if using_GPU else 'cpu')
-    covmats = covmats.to(device).contiguous()
-    nplets = nplets.to(device).contiguous()
-
-    # Generate the covariance matrices for each nplet
-    # |batch_size| x |order| x |order|
-    nplets_covmat = torch.stack([
-        covmat[nplet_idxs][:,nplet_idxs]
-        for covmat in covmats
-        for nplet_idxs in nplets
-    ])
-
-    # Compute measures
-    _, order = nplets.shape
-    allmin1 = _all_min_1_ids(order)
     
-    # Compute bias corrector if from sampled data (T is not None)
-    if T is not None:
-        bc1 = _gaussian_entropy_bias_correction(1,T)
-        bcN = _gaussian_entropy_bias_correction(order,T)
-        bcNmin1 = _gaussian_entropy_bias_correction(order-1,T)
-    else: 
-        bc1 = 0
-        bcN = 0
-        bcNmin1 = 0
+    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
+    batch_size, order = nplets.shape
+    
+    # Send the covariance matrices to the device
+    covmats = covmats.to(device).contiguous()
+
+    # If no nplets, then compute for the entire systems
+    nplets = nplets if nplets is not None else torch.arange(N).unsqueeze(0)
+
+    # If nplets are not tensors, convert to tensor
+    nplets = torch.as_tensor(nplets).to(device).contiguous()
+    
+    # Create marginal indexes
+    allmin1 = _all_min_1_ids(order, device=device)
+
+    # Create bias corrector values
+    bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
+
+    ############################################################################
+    #######   Generate the covariance matrices for each nplet in the batch  ####
+    ############################################################################
+    
+    # Step 1: Expand nplets to match the dimensions needed for batch indexing
+    # nplets_expanded will be of shape (batch_size, D, order)
+    nplets_expanded = nplets.unsqueeze(1).expand(-1, D, -1)
+
+    # Step 2: Prepare covmats for batch indexing
+    # We need to gather elements along the N dimension
+    # First, expand covmats to shape (batch_size, D, N, N)
+    covmats_expanded = covmats.unsqueeze(0).expand(batch_size, -1, -1, -1)
+
+    # Step 3: Gather the rows
+    # indices_row will be of shape (batch_size, D, order, N)
+    indices_row = nplets_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
+    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
+
+    # Step 4: Gather the columns
+    # indices_col will be of shape (batch_size, D, order, order)
+    indices_col = nplets_expanded.unsqueeze(-2).expand(-1, -1, order, -1)
+    nplets_covmat = torch.gather(gathered_rows, 3, indices_col)
+
+    ############################################################################
+    
+    # Pack results in a single batch
+    nplets_covmat = nplets_covmat.view(batch_size*D, order, order)
 
     # Batch process all nplets at once
-    # batch_res = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
-    results = torch.stack(_get_tc_dtc_from_batched_covmat(
-        nplets_covmat, allmin1, bc1, bcN, bcNmin1
-    )).T
+    # measures = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
+    # |batch_size*D|, |batch_size*D|, |batch_size*D|, |batch_size*D|
+    measures = _get_tc_dtc_from_batched_covmat(nplets_covmat,
+                                               allmin1,
+                                               bc1,
+                                               bcN,
+                                               bcNmin1)
 
-    return results
+    # Unpack results
+    nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
+
+    # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
+    return torch.stack([nplets_tc.view(batch_size, D),
+                        nplets_dtc.view(batch_size, D),
+                        nplets_o.view(batch_size, D),
+                        nplets_s.view(batch_size, D)], dim=-1)
 
 
 def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
@@ -145,7 +157,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
         * O-information (O)
         * S-information (S)
 
-    Args:
+    Parameters:
         X (np.ndarray or torch.tensor): (T samples x N variables) or (D datas x T samples x N variables) matrix.
         covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
         T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
@@ -160,27 +172,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
         pd.DataFrame: DataFrame containing computed metrics.
     """
 
-    # Force data to be a list of data
-    if isinstance(X, (np.ndarray, torch.Tensor)):
-        X = [X]
-
-    if isinstance(T, int):
-        T = [T] * len(X)
-
-    # check the number of dimensions of X
-    assert all([len(x.shape) == 2 for x in X]), 'X must be all 2D timseseries or covariance matrices'
-
-    # Handle different options for X parameter. Accept multivariate data or covariance matrix
-    if covmat_precomputed:
-        assert all([x.shape[0] == x.shape[1] == X[0].shape[0] for x in X]), 'All covariance matrices should be square and of the same dimension'
-        N = X[0].shape[1]
-        covmats = torch.stack([x if torch.is_tensor(x) else torch.tensor(x) for x in X])
-    else:
-        T = [x.shape[0] for x in X]
-        N = X[0].shape[1]
-        covmats = torch.stack([torch.tensor(gaussian_copula(to_numpy(x))[1]) for x in X])
-    
-    D = covmats.shape[0]
+    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
 
     max_order = N if max_order is None else max_order
 
@@ -193,10 +185,6 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
     assert max_order <= N, f"max_order must be lower or equal than N. {max_order} > {N})"
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
 
-    # make device cpu if not cuda available or cuda if available
-    using_GPU = (not use_cpu) and torch.cuda.is_available()
-    device = torch.device('cuda' if using_GPU else 'cpu')
-
     batch_size = batch_size // D
     print('Effective batch size:', batch_size*D, 'for', D, 'datasets with batch size', batch_size, 'each')
 
@@ -205,21 +193,9 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
     for order in tqdm(range(min_order, max_order+1), leave=False, desc='Order', disable=(min_order==max_order)):
 
         # Calculate constant values valid for all n-plets of the current order
-        allmin1 = _all_min_1_ids(order)
-        if T is not None:
-            bc1 = torch.stack([_gaussian_entropy_bias_correction(1,t) for t in T])
-            bcN = torch.stack([_gaussian_entropy_bias_correction(order,t) for t in T])
-            bcNmin1 = torch.stack([_gaussian_entropy_bias_correction(order-1,t) for t in T])
-        else:
-            bc1 = torch.stack([0] * len(X))
-            bcN = torch.stack([0] * len(X))
-            bcNmin1 = torch.stack([0] * len(X))
-        
-        # Make bc1 a tensor with [*bc1, *bc1, ...] bach_size times to broadcast with the batched data
-        bc1 = bc1.repeat(batch_size)
-        bcN = bcN.repeat(batch_size)
-        bcNmin1 = bcNmin1.repeat(batch_size)
-        
+        allmin1 = _all_min_1_ids(order, device=device)
+        bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
+
         # Generate dataset iterable
         dataset = CovarianceDataset(covmats, order)
         dataloader = DataLoader(
@@ -227,7 +203,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
             batch_size=batch_size,
             shuffle=False,
             num_workers=0, 
-            pin_memory=using_GPU
+            pin_memory=device.type == 'cuda'
         )
 
         # calculate measurments for each batch
@@ -237,7 +213,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
 
             # Compute measures
             res = _get_tc_dtc_from_batched_covmat(partition_covmats,
-                                                  allmin1[:curr_bs*D],
+                                                  allmin1,
                                                   bc1[:curr_bs*D],
                                                   bcN[:curr_bs*D],
                                                   bcNmin1[:curr_bs*D])
@@ -247,10 +223,10 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
 
             # Collect batch data
             data = batch_data_collector(partition_idxs,
-                                        nplets_o.view(curr_bs, D),
-                                        nplets_s.view(curr_bs, D),
                                         nplets_tc.view(curr_bs, D),
                                         nplets_dtc.view(curr_bs, D),
+                                        nplets_o.view(curr_bs, D),
+                                        nplets_s.view(curr_bs, D),
                                         bn)
 
             # Append to batched data

@@ -12,7 +12,8 @@ class CovarianceDataset(IterableDataset):
         
         assert len(covmat.shape) == 3, 'The covariance matrix must be 3D. (n_data, n_variables, n_variables)'
 
-        self.covmats = covmat.contiguous()
+        # Force covariance matrix to be contiguous in CPU to use the CPU memory to create the next batche
+        self.covmats = covmat.cpu().contiguous()
         self.n_variables = self.covmats.shape[1]
         self.partition_order = partition_order
         self.partitions_generator = combinations(range(self.n_variables), self.partition_order)

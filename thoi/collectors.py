@@ -1,17 +1,20 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union, Callable
 import pandas as pd
 import numpy as np
 import torch
+from functools import partial
+
+from thoi.commons import _get_string_metric
 
 ####################################################################################################
 ######################                     To dataframe                    #########################
 ####################################################################################################
 
 def batch_to_csv(partition_idxs: torch.Tensor,
-                 nplets_o: torch.Tensor,
-                 nplets_s: torch.Tensor,
                  nplets_tc: torch.Tensor,
                  nplets_dtc: torch.Tensor,
+                 nplets_o: torch.Tensor,
+                 nplets_s: torch.Tensor,
                  bn:int,
                  only_synergestic: bool=False,
                  columns: Optional[List[str]]=None,
@@ -93,75 +96,95 @@ def concatenate_csv(batched_dataframes, output_path, sep='\t'):
 #######################                     To tensor                    ###########################
 ####################################################################################################
 
-def batch_to_tensor(partition_idxs:np.ndarray,
-                    nplets_o:np.ndarray,
-                    nplets_s:np.ndarray,
-                    nplets_tc:np.ndarray,
-                    nplets_dtc:np.ndarray,
-                    bn:int,
-                    top_k:Optional[int] = None,
-                    metric:str = 'o',
-                    largest:bool = False):
+
+def top_k_nplets(nplets_measures: torch.tensor,
+          partition_idxs: torch.tensor,
+          k: int,
+          metric: Union[str, Callable], # Add typing and documentation of the callable input
+          largest: bool):
     
-    if top_k is not None and len(nplets_o) > top_k:
-
-        values_idxs = ['tc','dtc','o','s'].index(metric)
-        values = [nplets_tc, nplets_dtc, nplets_o, nplets_s][values_idxs]
-
-        _, indices = torch.topk(values, top_k, largest=largest, sorted=True)
-
-        nplets_tc = nplets_tc[indices]
-        nplets_dtc = nplets_dtc[indices]
-        nplets_o = nplets_o[indices]
-        nplets_s = nplets_s[indices]
-        partition_idxs = partition_idxs[indices.cpu()]
+    metric_func = partial(_get_string_metric, metric=metric) if isinstance(metric, str) else metric
     
+    # |batch_size|
+    values = metric_func(nplets_measures)
+    
+    # |k|
+    _, indices = torch.topk(values, k, largest=largest, sorted=True)
+
+    # (|k| x |D| x |4|, |k| x |N|)
     return (
-        nplets_tc,
-        nplets_dtc,
-        nplets_o,
-        nplets_s,
-        partition_idxs
+        nplets_measures[indices],
+        partition_idxs[indices.cpu()]
     )
 
 
-def concat_tensors(batched_tensors: List[Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor]],
-                   top_k: Optional[int] = None,
-                   metric:str = 'o',
-                   largest:bool = False):
+# TODO: This function is used in simulated_annealing, check if its used in other places and if there is modifications to be done on these places
+def batch_to_tensor(partition_idxs: torch.tensor,
+                    nplets_tc: torch.tensor,
+                    nplets_dtc: torch.tensor,
+                    nplets_o: torch.tensor,
+                    nplets_s: torch.tensor,
+                    bn: Optional[int]=None,
+                    top_k: Optional[int]=None,
+                    metric: Union[str,Callable]='o',
+                    largest: bool=False):
+
+    # TODO: make this function to accept both a single or a list of inputs to use it for batches and for concat all batches
+    # |batch_size| x |D|
+    assert nplets_tc.shape == nplets_dtc.shape == nplets_o.shape == nplets_s.shape == 2, 'All nplets must be 2D tensors'
+
+    # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
+    nplets_measures = torch.stack([nplets_tc,
+                                   nplets_dtc,
+                                   nplets_o,
+                                   nplets_s], dim=-1)
+
+    # If top_k is not None and len(nplets_o) > top_k, return the top_k nplets
+    if (top_k is not None) and (nplets_measures.shape[0] > top_k):
+        # |k x D x 4|, |k x N|
+        return top_k_nplets(nplets_measures,
+                            partition_idxs,
+                            top_k,
+                            metric,
+                            largest)
+
+    # If not top_k or len(nplets_measuresa) > top_k  return the original values
+    # |k x D x 4|, |k x N|
+    return (nplets_measures, partition_idxs)
+
+# TODO: This function is used in simulated_annealing, check if its used in other places and if there is modifications to be done on these places
+def concat_batched_tensors(batched_tensors: List[Tuple[torch.tensor, torch.tensor]],
+                           top_k: Optional[int] = None,
+                           metric:str = 'o',
+                           largest:bool = False):
     
-    nplets_tc = torch.cat([batch[0] for batch in batched_tensors])
-    nplets_dtc = torch.cat([batch[1] for batch in batched_tensors])
-    nplets_o = torch.cat([batch[2] for batch in batched_tensors])
-    nplets_s = torch.cat([batch[3] for batch in batched_tensors])
-    partition_idxs = torch.cat([batch[4] for batch in batched_tensors])
+    # Unpac the batched tensors
+    nplets_measures, partition_idxs_tensors = zip(*batched_tensors)
+    
+    # Concatenate each tuple of tensors
+    nplets_measures = torch.cat(nplets_measures)
+    partition_idxs = torch.cat(partition_idxs_tensors)
+    
+    # If top_k is not None and len(nplets_o) > top_k, return the top_k nplets
+    if (top_k is not None) and (nplets_measures.shape[0] > top_k):
+        # |k x D x 4|, |k x N|
+        return top_k_nplets(nplets_measures,
+                            partition_idxs,
+                            top_k,
+                            metric,
+                            largest)
 
-    if top_k is not None and len(nplets_o) > top_k:
-
-        values_idxs = ['tc','dtc','o','s'].index(metric)
-        values = [nplets_tc, nplets_dtc, nplets_o, nplets_s][values_idxs]
-
-        _, indices = torch.topk(values, top_k, largest=largest, sorted=True)
-        nplets_tc = nplets_tc[indices]
-        nplets_dtc = nplets_dtc[indices]
-        nplets_o = nplets_o[indices]
-        nplets_s = nplets_s[indices]
-        partition_idxs = partition_idxs[indices.cpu()]
-
-    return (
-        nplets_tc,
-        nplets_dtc,
-        nplets_o,
-        nplets_s,
-        partition_idxs
-    )
+    # If not top_k or len(nplets_measuresa) > top_k  return the original values
+    # |k x D x 4|, |k x N|
+    return (nplets_measures, partition_idxs)
 
 
+# TODO: Check where this is used
 def beast_mean_across_batch(partition_idxs:torch.Tensor,
-                            nplets_o:torch.Tensor,
-                            nplets_s:torch.Tensor,
                             nplets_tc:torch.Tensor,
                             nplets_dtc:torch.Tensor,
+                            nplets_o:torch.Tensor,
+                            nplets_s:torch.Tensor,
                             bn:int,
                             only_synergestic:bool=False,
                             top_k:Optional[int] = None,
@@ -169,10 +192,10 @@ def beast_mean_across_batch(partition_idxs:torch.Tensor,
                             largest:bool = False):
     '''
     @param partition_idxs: torch.Tensor of shape (n_data, repeat, order)
-    @param nplets_o: torch.Tensor of shape (n_data, repeat)
-    @param nplets_s: torch.Tensor of shape (n_data, repeat)
     @param nplets_tc: torch.Tensor of shape (n_data, repeat)
     @param nplets_dtc: torch.Tensor of shape (n_data, repeat)
+    @param nplets_o: torch.Tensor of shape (n_data, repeat)
+    @param nplets_s: torch.Tensor of shape (n_data, repeat)
     '''
     
     # Assert that that all partition_idxs have the same values

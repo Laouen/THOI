@@ -1,13 +1,13 @@
 from typing import Optional
 import numpy as np
-from thoi.measures.utils import gaussian_copula
+from thoi.commons import gaussian_copula
 from tqdm import trange
 import torch
 from functools import partial
 
 from thoi.measures.gaussian_copula import multi_order_measures
-from thoi.collectors import batch_to_tensor, concat_tensors
-from thoi.heuristics.scoring import _evaluate_nplet
+from thoi.collectors import batch_to_tensor, concat_batched_tensors
+from thoi.heuristics.scoring import _evaluate_nplets
 
 def init_lower_order(X: np.ndarray,
                      order:int,
@@ -23,7 +23,7 @@ def init_lower_order(X: np.ndarray,
     current_solution = multi_order_measures(
         X, lower_order, lower_order, batch_size=repeat, use_cpu=use_cpu,
         batch_data_collector=partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest),
-        batch_aggregation=partial(concat_tensors, top_k=repeat, metric=metric, largest=largest)
+        batch_aggregation=partial(concat_batched_tensors, top_k=repeat, metric=metric, largest=largest)
     )[-1].to(device)
 
     # |N|
@@ -94,7 +94,7 @@ def simulated_annealing(X: np.ndarray,
         assert current_solution is not None, 'current_solution must be a torch tensor'
 
     # |batch_size|
-    current_energy = _evaluate_nplet(covmat, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplets(covmat, T, current_solution, metric, use_cpu=use_cpu)
 
     if not largest:
         current_energy = -current_energy
@@ -134,7 +134,7 @@ def simulated_annealing(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplet(covmat, T, new_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplets(covmat, T, new_solution, metric, use_cpu=use_cpu)
 
         if not largest:
             new_energy = -new_energy
