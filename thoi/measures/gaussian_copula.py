@@ -12,6 +12,42 @@ from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
 from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _get_bias_correctors
 
+def _get_single_exclusion_dets(covmats: torch.tensor, allmin1: torch.tensor):
+    
+    batch_size, N, _ = covmats.shape
+    
+    # Step 1: Expand allmin1 to match the batch size
+    # Shape: (batch_size, N, N-1)
+    allmin1_expanded = allmin1.unsqueeze(0).expand(batch_size, -1, -1)
+
+    # Step 2: Expand covmats to include the N dimension for variable exclusion
+    # Shape: (batch_size, N, N, N)
+    covmats_expanded = covmats.unsqueeze(1).expand(-1, N, -1, -1)
+
+    # Step 3: Gather the rows corresponding to the indices in allmin1
+    # Shape of indices_row: (batch_size, N, N-1, N)
+    indices_row = allmin1_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
+    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
+
+    # Step 4: Gather the columns corresponding to the indices in allmin1
+    # Shape of indices_col: (batch_size, N, N-1, N-1)
+    indices_col = allmin1_expanded.unsqueeze(-2).expand(-1, -1, N-1, -1)
+    covmats_sub = torch.gather(gathered_rows, 3, indices_col)
+
+    # Now, covmats_sub has shape (batch_size, N, N-1, N-1)
+    
+    # Step 5: Compute the determinants
+    # Reshape to (batch_size * N, N-1, N-1)
+    covmats_sub_flat = covmats_sub.view(-1, N - 1, N - 1)
+
+    # Compute the determinants
+    dets_flat = torch.linalg.det(covmats_sub_flat)  # Shape: (batch_size * N,)
+
+    # Reshape back to (batch_size, N)
+    single_exclusion_dets = dets_flat.view(batch_size, N)
+
+    return single_exclusion_dets
+
 
 def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor, bc1: torch.tensor, bcN: torch.tensor, bcNmin1: torch.tensor):
 
@@ -25,10 +61,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor
     # |bz| x |N|
     single_var_dets = torch.diagonal(covmats, dim1=-2, dim2=-1)
     # |bz| x |N|
-    single_exclusion_dets = torch.stack([
-        torch.linalg.det(covmats[:,ids].contiguous()[:,:,ids].contiguous())
-        for ids in allmin1
-    ], dim=1)
+    single_exclusion_dets = _get_single_exclusion_dets(covmats, allmin1)
 
     # |bz|
     sys_ent = _gaussian_entropy_estimation(batch_det, n_variables) - bcN
