@@ -82,7 +82,7 @@ def simulated_annealing(X: np.ndarray,
 
     T, N = X.shape
 
-    covmat = torch.tensor(gaussian_copula_covmat(X))
+    covmat = torch.from_numpy(gaussian_copula_covmat(X))
     covmat = covmat.to(device).contiguous()
 
     # Compute initial solution

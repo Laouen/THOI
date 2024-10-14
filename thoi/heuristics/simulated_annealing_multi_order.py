@@ -104,7 +104,7 @@ def simulated_annealing_multi_order(X: np.ndarray,
 
     i_repeat = torch.arange(repeat).unsqueeze(1).expand(-1, step_size)
 
-    covmat = torch.tensor(gaussian_copula_covmat(X))
+    covmat = torch.from_numpy(gaussian_copula_covmat(X))
     covmat = covmat.to(device).contiguous()
 
     # generate a matrix with shape (repeat, N) of hot encoders for each element

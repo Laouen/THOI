@@ -84,7 +84,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor],
     else:
         assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
         T, N = X.shape
-        covmat = torch.tensor(gaussian_copula_covmat(X))
+        covmat = torch.from_numpy(gaussian_copula_covmat(X))
 
     # Handle different options for nplet parameter
     # Compute for the entire systems

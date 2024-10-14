@@ -167,6 +167,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
                          max_order: Optional[int]=None,
                          batch_size: int = 1000000,
                          use_cpu: bool = False,
+                         dataset_device: str = 'cpu', # [cpu, cuda]
                          batch_aggregation: Optional[Callable[[any],any]] = None,
                          batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None,
                          num_workers: int = 0):
@@ -218,7 +219,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
         bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
         # Generate dataset iterable
-        dataset = CovarianceDataset(covmats, order)
+        dataset = CovarianceDataset(covmats, order, use_cpu=dataset_device == 'cpu')
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,

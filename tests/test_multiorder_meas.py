@@ -25,6 +25,8 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
         self.cols_to_compare = ['tc', 'dtc', 'o', 's']
 
+
+    # TODO: make this test for all combinations of use_cpu in [True, False] and dataset_device in ['cpu', 'gpu']
     def test_multiorder_measures_timeseries(self):
 
         df_res = multi_order_measures(self.X)
@@ -48,6 +50,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
                 self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=1e-6, equal_nan=True))
 
+    # TODO: make this test for all combinations of use_cpu in [True, False] and dataset_device in ['cpu', 'gpu']
     def test_multiorder_measures_precomputed_covmat(self):
 
         T, N = self.X.shape
