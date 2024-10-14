@@ -21,7 +21,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
            batch_size: int=1000000,
            metric: Union[str,Callable]='o',
            largest: bool=False):
-    
+
     '''
     Brief: Greedy algorithm to find the best order of nplets to maximize the metric for a given multivariate series or covariance matrices
     
@@ -30,7 +30,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
     '''
-    
+
     covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
 
     # Compute initial solutions

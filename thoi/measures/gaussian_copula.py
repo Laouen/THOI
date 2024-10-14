@@ -12,7 +12,7 @@ from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
 from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _get_bias_correctors
 
-def _get_single_exclusion_dets(covmats: torch.tensor, allmin1: torch.tensor):
+def _get_single_exclusion_covmats(covmats: torch.tensor, allmin1: torch.tensor):
     
     batch_size, N, _ = covmats.shape
     
@@ -33,20 +33,9 @@ def _get_single_exclusion_dets(covmats: torch.tensor, allmin1: torch.tensor):
     # Shape of indices_col: (batch_size, N, N-1, N-1)
     indices_col = allmin1_expanded.unsqueeze(-2).expand(-1, -1, N-1, -1)
     covmats_sub = torch.gather(gathered_rows, 3, indices_col)
-
-    # Now, covmats_sub has shape (batch_size, N, N-1, N-1)
     
-    # Step 5: Compute the determinants
-    # Reshape to (batch_size * N, N-1, N-1)
-    covmats_sub_flat = covmats_sub.view(-1, N - 1, N - 1)
-
-    # Compute the determinants
-    dets_flat = torch.linalg.det(covmats_sub_flat)  # Shape: (batch_size * N,)
-
-    # Reshape back to (batch_size, N)
-    single_exclusion_dets = dets_flat.view(batch_size, N)
-
-    return single_exclusion_dets
+    # |bz| x |N| x |N-1| x |N-1|
+    return covmats_sub
 
 
 def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor, bc1: torch.tensor, bcN: torch.tensor, bcNmin1: torch.tensor):
@@ -54,28 +43,28 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor
     # covmat is a batch of covariance matrices
     # |bz| x |N| x |N|
 
-    n_variables = covmats.shape[2]
+    batch_size, N = covmats.shape[:2]
 
-    # |bz|
-    batch_det = torch.linalg.det(covmats)
+    # Compute the sub covariance matrices for each variable and the system without that variable exclusion
     # |bz| x |N|
-    single_var_dets = torch.diagonal(covmats, dim1=-2, dim2=-1)
+    single_var_covmats = torch.diagonal(covmats, dim1=-2, dim2=-1).view(batch_size, N, 1, 1)
     # |bz| x |N|
-    single_exclusion_dets = _get_single_exclusion_dets(covmats, allmin1)
+    single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
 
+    # Compute the entropy of the system, the variavbles and the system without the variable
     # |bz|
-    sys_ent = _gaussian_entropy_estimation(batch_det, n_variables) - bcN
-    # This could be calculated once at the begining and then accessed here.
+    sys_ent = _gaussian_entropy_estimation(covmats, N) - bcN
+    # TODO: This could be calculated once at the begining and then accessed here.
     # |bz| x |N|
-    var_ents = _gaussian_entropy_estimation(single_var_dets, 1) - bc1.unsqueeze(1)
+    var_ents = _gaussian_entropy_estimation(single_var_covmats, 1) - bc1.unsqueeze(1)
     # |bz| x |N|
-    single_exclusion_ents = _gaussian_entropy_estimation(single_exclusion_dets, n_variables-1) - bcNmin1.unsqueeze(1)
+    single_exclusion_ents = _gaussian_entropy_estimation(single_exclusion_covmats, N-1) - bcNmin1.unsqueeze(1)
 
     # |bz|
     nplet_tc = torch.sum(var_ents, dim=1) - sys_ent
     # TODO: inf - inf return NaN in pytorch. Check how should I handle this.
     # |bz|
-    nplet_dtc = torch.sum(single_exclusion_ents, dim=1) - (n_variables-1.0)*sys_ent
+    nplet_dtc = torch.sum(single_exclusion_ents, dim=1) - (N-1.0)*sys_ent
 
     # |bz|
     nplet_o = nplet_tc - nplet_dtc

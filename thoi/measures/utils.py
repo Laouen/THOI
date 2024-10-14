@@ -20,8 +20,8 @@ def _gaussian_entropy_bias_correction(N,T):
     return torch.tensor((N*np.log(2/(T-1)) + np.sum(psiterms))/2)
 
 
-def _gaussian_entropy_estimation(cov_det, n_variables):
-    return 0.5 * (n_variables*torch.log(TWOPIE) + torch.log(cov_det))
+def _gaussian_entropy_estimation(covmats, N):
+    return 0.5 * (N*torch.log(TWOPIE) + torch.logdet(covmats))
 
 
 def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
