@@ -50,7 +50,6 @@ def synergestic_graph(df: pd.DataFrame, marker_cols:List[int], weight_method: st
 
     return G
 
-
 def synergestic_centrality(G):
 
     # Compute the centrality of each node

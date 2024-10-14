@@ -47,7 +47,7 @@ def _split_by_hot_size(current_solution):
     
     return split_solutions, sorted_indices
 
-
+@torch.no_grad()
 def hot_encode_to_indexes(nplets):
     batch_size, N = nplets.shape
     non_zero_indices = nplets.nonzero(as_tuple=False)
@@ -75,7 +75,7 @@ def _evaluate_nplet_by_size(covmat: torch.tensor, T:int, batched_nplets: torch.t
     
     return results
 
-
+@torch.no_grad()
 def simulated_annealing_multi_order(X: np.ndarray,
                                     initial_temp: float = 100.0,
                                     cooling_rate: float = 0.99,

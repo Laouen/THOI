@@ -74,7 +74,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor
 
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
-
+@torch.no_grad()
 def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
@@ -162,7 +162,7 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[to
                         nplets_o.view(batch_size, D),
                         nplets_s.view(batch_size, D)], dim=-1)
 
-
+@torch.no_grad()
 def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,

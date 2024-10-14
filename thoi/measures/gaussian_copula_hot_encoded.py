@@ -67,7 +67,7 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor,
 
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
-
+@torch.no_grad()
 def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
                     nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
                     T:Optional[int] = None,
@@ -144,7 +144,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
 
     return results
 
-
+@torch.no_grad()
 def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
                          covmat_precomputed: bool=False,
                          T: Optional[int]=None,

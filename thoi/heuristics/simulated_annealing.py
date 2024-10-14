@@ -9,6 +9,7 @@ from thoi.measures.gaussian_copula import multi_order_measures
 from thoi.collectors import batch_to_tensor, concat_batched_tensors
 from thoi.heuristics.scoring import _evaluate_nplets
 
+@torch.no_grad()
 def init_lower_order(X: np.ndarray,
                      order:int,
                      lower_order:int,
@@ -44,7 +45,7 @@ def init_lower_order(X: np.ndarray,
     # |repeat| x |order|
     return torch.cat((current_solution, valid_candidates) , dim=1).contiguous()
 
-
+@torch.no_grad()
 def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=None):
 
     if device is None:
@@ -55,7 +56,7 @@ def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=N
         for _ in range(repeat)
     ])
 
-
+@torch.no_grad()
 def simulated_annealing(X: np.ndarray, 
                         order: int,
                         initial_temp:float = 100.0,

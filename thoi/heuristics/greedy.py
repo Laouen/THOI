@@ -10,7 +10,7 @@ from thoi.collectors import batch_to_tensor, concat_batched_tensors
 from thoi.heuristics.scoring import _evaluate_nplets
 from thoi.commons import _normalize_input_data
 
-
+@torch.no_grad()
 def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
            covmat_precomputed: bool=False,
            T: Optional[Union[int, List[int]]]=None,
@@ -35,18 +35,18 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
 
     # Compute initial solutions
     batch_data_collector = partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest)
-    batch_aggregation = partial(concat_batched_tensors, top_k=repeat, metric=metric, largest=largest)
+    batch_aggregation = partial(concat_batched_tensors, top_k=repeat, metric=None, largest=largest)
 
     # |repeat| x |initial_order|
-    _, current_solution = multi_order_measures([covmat for covmat in covmats],
-                                               covmat_precomputed=True,
-                                               T=T,
-                                               min_order=initial_order,
-                                               max_order=initial_order,
-                                               batch_size=batch_size,
-                                               use_cpu=use_cpu,
-                                               batch_data_collector=batch_data_collector,
-                                               batch_aggregation=batch_aggregation)
+    _, current_solution, current_scores = multi_order_measures(covmats,
+                                                               covmat_precomputed=True,
+                                                               T=T,
+                                                               min_order=initial_order,
+                                                               max_order=initial_order,
+                                                               batch_size=batch_size,
+                                                               use_cpu=use_cpu,
+                                                               batch_data_collector=batch_data_collector,
+                                                               batch_aggregation=batch_aggregation)
 
     # Send elements to cuda if computing on GPU
     covmats = covmats.to(device).contiguous()
@@ -55,7 +55,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     order = order if order is not None else N
 
     # Iterate over the remaining orders to get the best solution for each order
-    best_scores = [_evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)]
+    best_scores = [current_scores]
     for _ in trange(initial_order, order, leave=False, desc='Order'):
         best_candidate, best_score = _next_order_greedy(covmats, T, current_solution,
                                                        metric=metric,
