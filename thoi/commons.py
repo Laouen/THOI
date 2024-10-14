@@ -19,7 +19,6 @@ def _get_string_metric(batched_res: np.ndarray, metric:str):
     # |batch_size|
     return batched_res[:,:,metric_idx].mean(axis=1)
 
-
 def gaussian_copula(X: np.ndarray):
     """
     Transform the data into a Gaussian copula and compute the covariance matrix.
@@ -64,13 +63,11 @@ def _to_numpy(X):
     else:
         raise TypeError(f"Unsupported type: {type(X)}")
 
-
 def _get_device(use_cpu:bool=False):
     """Set the use of GPU if available"""
     using_GPU = torch.cuda.is_available() and not use_cpu
     device = torch.device('cuda' if using_GPU else 'cpu')
     return device
-
 
 def _normalize_input_data(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
                          covmat_precomputed: bool=False,

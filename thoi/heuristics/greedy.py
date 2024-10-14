@@ -52,6 +52,8 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     covmats = covmats.to(device).contiguous()
     current_solution = current_solution.to(device).contiguous()
 
+    order = order if order is not None else N
+
     # Iterate over the remaining orders to get the best solution for each order
     best_scores = [_evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)]
     for _ in trange(initial_order, order, leave=False, desc='Order'):

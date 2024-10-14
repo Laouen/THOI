@@ -6,7 +6,7 @@ import pandas as pd
 import os
 
 from thoi.measures.gaussian_copula import multi_order_measures
-from thoi.commons import gaussian_copula
+from thoi.commons import gaussian_copula_covmat
 
 class TestMultiOrderMeasures(unittest.TestCase):
 
@@ -51,7 +51,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
     def test_multiorder_measures_precomputed_covmat(self):
 
         T, N = self.X.shape
-        covmat = gaussian_copula(self.X)[1]
+        covmat = gaussian_copula_covmat(self.X)
 
         df_res = multi_order_measures(covmat, covmat_precomputed=True, T=T)
 

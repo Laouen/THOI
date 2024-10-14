@@ -1,6 +1,6 @@
 from typing import Optional
 import numpy as np
-from thoi.commons import gaussian_copula
+from thoi.commons import gaussian_copula_covmat
 from tqdm import trange
 import torch
 from functools import partial
@@ -81,7 +81,7 @@ def simulated_annealing(X: np.ndarray,
 
     T, N = X.shape
 
-    covmat = torch.tensor(gaussian_copula(X)[1])
+    covmat = torch.tensor(gaussian_copula_covmat(X))
     covmat = covmat.to(device).contiguous()
 
     # Compute initial solution

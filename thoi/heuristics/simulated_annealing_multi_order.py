@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import trange
 import torch
 
-from thoi.commons import gaussian_copula
+from thoi.commons import gaussian_copula_covmat
 from thoi.heuristics.scoring import _evaluate_nplets, _evaluate_nplet_hot_encoded
 
 def _random_solutions(repeat, N, device):
@@ -104,7 +104,7 @@ def simulated_annealing_multi_order(X: np.ndarray,
 
     i_repeat = torch.arange(repeat).unsqueeze(1).expand(-1, step_size)
 
-    covmat = torch.tensor(gaussian_copula(X)[1])
+    covmat = torch.tensor(gaussian_copula_covmat(X))
     covmat = covmat.to(device).contiguous()
 
     # generate a matrix with shape (repeat, N) of hot encoders for each element

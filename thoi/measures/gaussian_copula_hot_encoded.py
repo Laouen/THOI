@@ -1,6 +1,6 @@
 from typing import Optional, List, Callable, Union
 
-from thoi.commons import gaussian_copula
+from thoi.commons import gaussian_copula_covmat
 from tqdm.autonotebook import tqdm
 from functools import partial
 
@@ -84,7 +84,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
     else:
         assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
         T, N = X.shape
-        covmat = torch.tensor(gaussian_copula(X)[1])
+        covmat = torch.tensor(gaussian_copula_covmat(X))
 
     # Handle different options for nplet parameter
     # Compute for the entire systems
@@ -185,7 +185,7 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
     else:
         assert not torch.is_tensor(X), 'Not precomputed covariance should be numpys'
         T, N = X.shape
-        covmat = gaussian_copula(X)[1]
+        covmat = gaussian_copula_covmat(X)
 
     max_order = N if max_order is None else max_order
 
