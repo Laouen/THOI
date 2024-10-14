@@ -1,55 +1,16 @@
-from typing import Optional
+from typing import Optional, List, Union, Callable
 import numpy as np
 from thoi.commons import gaussian_copula_covmat
 from tqdm import trange
 import torch
-from functools import partial
 
-from thoi.measures.gaussian_copula import multi_order_measures
-from thoi.collectors import batch_to_tensor, concat_batched_tensors
 from thoi.heuristics.scoring import _evaluate_nplets
-
-@torch.no_grad()
-def init_lower_order(X: np.ndarray,
-                     order:int,
-                     lower_order:int,
-                     repeat:int,
-                     metric:str,
-                     largest:bool,
-                     use_cpu:bool,
-                     device:torch.device):
-    N = X.shape[1]
-
-    # |repeat| x |lower_order|
-    current_solution = multi_order_measures(
-        X, lower_order, lower_order, batch_size=repeat, use_cpu=use_cpu,
-        batch_data_collector=partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest),
-        batch_aggregation=partial(concat_batched_tensors, top_k=repeat, metric=metric, largest=largest)
-    )[-1].to(device)
-
-    # |N|
-    all_elements = torch.arange(N, device=device)
-    
-    # |repeat| x |order-lower_order|
-    valid_candidates = [
-        all_elements[~torch.isin(all_elements, current_solution[b])]
-        for b in torch.arange(repeat, device=device)
-    ]
-
-    # |repeat| x |order-lower_order|
-    valid_candidates = torch.stack([
-        vd[torch.randperm(len(vd), device=device)[:order-lower_order]]
-        for vd in valid_candidates
-    ]).contiguous()
-    
-    # |repeat| x |order|
-    return torch.cat((current_solution, valid_candidates) , dim=1).contiguous()
+from thoi.commons import _normalize_input_data
 
 @torch.no_grad()
 def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=None):
 
-    if device is None:
-        device = torch.device('cpu')
+    device = torch.device('cpu') if device is None else device
 
     return torch.stack([
         torch.randperm(N, device=device)[:order]
@@ -57,45 +18,31 @@ def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=N
     ])
 
 @torch.no_grad()
-def simulated_annealing(X: np.ndarray, 
-                        order: int,
-                        initial_temp:float = 100.0,
-                        cooling_rate:float = 0.99,
-                        max_iterations:int = 1000,
-                        repeat:int = 10,
-                        use_cpu:bool = False,
-                        init_method:str = 'random', # lower_order, 'random', 'precumputed', 'precomputed_lower_order';
-                        lower_order:int = None,
-                        early_stop:int = 100,
-                        current_solution:Optional[torch.Tensor] = None,
-                        metric:str = 'o', # tc, dtc, o, s
-                        largest:bool = False):
+def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                        covmat_precomputed: bool=False,
+                        T: Optional[Union[int, List[int]]]=None,
+                        initial_solution: Optional[torch.Tensor] = None,
+                        order: Optional[int]=None,
+                        repeat: int = 10,
+                        use_cpu: bool = False,
+                        max_iterations: int = 1000,
+                        early_stop: int = 100,
+                        initial_temp: float = 100.0,
+                        cooling_rate: float = 0.99,
+                        metric: Union[str,Callable]='o', # tc, dtc, o, s
+                        largest: bool = False):
+    
+    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
 
-    lower_order = order-1 if lower_order is None else lower_order
-    assert init_method != 'lower_order' or lower_order < order, 'Init from optima lower order cannot start from a lower_order higher than the order to compute.' 
-
-    assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
-
-    # make device cpu if not cuda available or cuda if available
-    using_GPU = torch.cuda.is_available() and not use_cpu
-    device = torch.device('cuda' if using_GPU else 'cpu')
-
-    T, N = X.shape
-
-    covmat = torch.from_numpy(gaussian_copula_covmat(X))
-    covmat = covmat.to(device).contiguous()
-
-    # Compute initial solution
+    # Compute current solution
     # |batch_size| x |order|
-    if init_method == 'random':
+    if initial_solution is None:
         current_solution = random_sampler(N, order, repeat, device)
-    elif init_method == 'lower_order':
-        current_solution = init_lower_order(X, order, lower_order, repeat, metric, largest, use_cpu, device)
-    elif init_method == 'precomputed':
-        assert current_solution is not None, 'current_solution must be a torch tensor'
+    else:
+        current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = _evaluate_nplets(covmat, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
 
     if not largest:
         current_energy = -current_energy
@@ -135,7 +82,7 @@ def simulated_annealing(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplets(covmat, T, new_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplets(covmats, T, new_solution, metric, use_cpu=use_cpu)
 
         if not largest:
             new_energy = -new_energy
