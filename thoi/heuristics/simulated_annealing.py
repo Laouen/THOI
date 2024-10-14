@@ -1,6 +1,5 @@
 from typing import Optional, List, Union, Callable
 import numpy as np
-from thoi.commons import gaussian_copula_covmat
 from tqdm import trange
 import torch
 
