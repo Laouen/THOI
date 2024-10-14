@@ -224,7 +224,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers, 
-            pin_memory=device.type == 'cuda'
+            pin_memory=device.type == 'cuda' and dataset.covmats.device.type != 'cuda'
         )
 
         # calculate measurments for each batch
