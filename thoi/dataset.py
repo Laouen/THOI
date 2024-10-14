@@ -14,7 +14,7 @@ class CovarianceDataset(IterableDataset):
 
         # Force covariance matrix to be contiguous in CPU to use the CPU memory to create the next batche
         self.covmats = covmat.cpu().contiguous()
-        self.n_variables = self.covmats.shape[1]
+        self.n_variables = self.covmats.shape[-1]
         self.partition_order = partition_order
         self.partitions_generator = combinations(range(self.n_variables), self.partition_order)
 

@@ -131,7 +131,7 @@ def batch_to_tensor(partition_idxs: torch.tensor,
 
     # TODO: make this function to accept both a single or a list of inputs to use it for batches and for concat all batches
     # |batch_size| x |D|
-    assert nplets_tc.shape == nplets_dtc.shape == nplets_o.shape == nplets_s.shape == 2, 'All nplets must be 2D tensors'
+    assert len(nplets_tc.shape) == len(nplets_dtc.shape) == len(nplets_o.shape) == len(nplets_s.shape) == 2, 'All nplets must be 2D tensors'
 
     # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
     nplets_measures = torch.stack([nplets_tc,

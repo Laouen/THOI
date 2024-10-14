@@ -27,9 +27,9 @@ def _evaluate_nplets(covmats: torch.tensor,
 
     # |bached_nplets| x |D| x |4 = (tc, dtc, o, s)|
     batched_measures = nplets_measures(covmats,
-                                       batched_nplets,
                                        T=T,
                                        covmat_precomputed=True,
+                                       nplets=batched_nplets,
                                        use_cpu=use_cpu)
     
     # |batch_size|

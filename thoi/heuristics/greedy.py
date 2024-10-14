@@ -38,7 +38,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     batch_aggregation = partial(concat_batched_tensors, top_k=repeat, metric=metric, largest=largest)
 
     # |repeat| x |initial_order|
-    _, current_solution = multi_order_measures(covmats,
+    _, current_solution = multi_order_measures([covmat for covmat in covmats],
                                                covmat_precomputed=True,
                                                T=T,
                                                min_order=initial_order,
