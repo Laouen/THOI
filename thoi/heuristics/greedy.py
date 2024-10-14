@@ -47,6 +47,9 @@ def greedy(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tenso
                                                                use_cpu=use_cpu,
                                                                batch_data_collector=batch_data_collector,
                                                                batch_aggregation=batch_aggregation)
+    
+    # send current solution to the device
+    current_solution = current_solution.to(device).contiguous()
 
     # Set the order to the maximum order if not specified
     order = order if order is not None else N
