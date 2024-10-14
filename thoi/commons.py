@@ -69,7 +69,7 @@ def _get_device(use_cpu:bool=False):
     device = torch.device('cuda' if using_GPU else 'cpu')
     return device
 
-def _normalize_input_data(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+def _normalize_input_data(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          use_cpu: bool=False):
@@ -120,5 +120,8 @@ def _normalize_input_data(X: Union[np.ndarray, torch.tensor, List[np.ndarray], L
     # Handle different options for T parameter
     if isinstance(T, int):
         T = [T] * D
+    
+    # Send covmat to device  
+    covmats = covmats.to(device).contiguous()
 
     return covmats, D, N, T, device

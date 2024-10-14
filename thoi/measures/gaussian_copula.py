@@ -13,7 +13,7 @@ from thoi.collectors import batch_to_csv, concat_and_sort_csv
 from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _get_bias_correctors
 
 
-def _get_single_exclusion_covmats(covmats: torch.tensor, allmin1: torch.tensor):
+def _get_single_exclusion_covmats(covmats: torch.Tensor, allmin1: torch.Tensor):
     
     batch_size, N, _ = covmats.shape
     
@@ -39,7 +39,7 @@ def _get_single_exclusion_covmats(covmats: torch.tensor, allmin1: torch.tensor):
     return covmats_sub
 
 
-def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor, bc1: torch.tensor, bcN: torch.tensor, bcNmin1: torch.tensor):
+def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor, bc1: torch.Tensor, bcN: torch.Tensor, bcNmin1: torch.Tensor):
 
     # covmat is a batch of covariance matrices
     # |bz| x |N| x |N|
@@ -75,24 +75,24 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.tensor, allmin1: torch.tensor
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 @torch.no_grad()
-def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
-                    nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
+                    nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                     use_cpu: bool = False):
     
     '''
     Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
     
     Parameters:
-    - X (Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+    - X (Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
     - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
-    - nplets (Optional[Union[np.ndarray,torch.tensor]]): The nplets to calculate the measures with shape (batch_size, order)
+    - nplets (Optional[Union[np.ndarray,torch.Tensor]]): The nplets to calculate the measures with shape (batch_size, order)
     - use_cpu (bool): A boolean flag to indicate if the computation should be done on the CPU.
     
     Returns:
-    - torch.tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
+    - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
     '''
     
     # nplets must be a batched tensor
@@ -100,15 +100,13 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[to
     
     covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
     batch_size, order = nplets.shape
-    
-    # Send the covariance matrices to the device
-    covmats = covmats.to(device).contiguous()
 
     # If no nplets, then compute for the entire systems
-    nplets = nplets if nplets is not None else torch.arange(N).unsqueeze(0)
-
-    # If nplets are not tensors, convert to tensor
-    nplets = torch.as_tensor(nplets).to(device).contiguous()
+    if nplets is None:
+        nplets = torch.arange(N, device=device).unsqueeze(0)
+    else:
+        # If nplets are not tensors, convert to tensor
+        nplets = torch.as_tensor(nplets).to(device).contiguous()
     
     # Create marginal indexes
     allmin1 = _all_min_1_ids(order, device=device)
@@ -145,8 +143,6 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[to
     nplets_covmat = nplets_covmat.view(batch_size*D, order, order)
 
     # Batch process all nplets at once
-    # measures = (nplet_tc, nplet_dtc, nplet_o, nplet_s)
-    # |batch_size*D|, |batch_size*D|, |batch_size*D|, |batch_size*D|
     measures = _get_tc_dtc_from_batched_covmat(nplets_covmat,
                                                allmin1,
                                                bc1,
@@ -154,6 +150,7 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[to
                                                bcNmin1)
 
     # Unpack results
+    # |batch_size*D|, |batch_size*D|, |batch_size*D|, |batch_size*D|
     nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
 
     # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
@@ -163,7 +160,7 @@ def nplets_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[to
                         nplets_s.view(batch_size, D)], dim=-1)
 
 @torch.no_grad()
-def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          min_order: int=3,
@@ -171,7 +168,8 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
                          batch_size: int = 1000000,
                          use_cpu: bool = False,
                          batch_aggregation: Optional[Callable[[any],any]] = None,
-                         batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
+                         batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None,
+                         num_workers: int = 0):
     """
     Compute multi-order Gaussian Copula (GC) measurements for the given data matrix X.
     The measurements computed are:
@@ -181,7 +179,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
         * S-information (S)
 
     Parameters:
-        X (np.ndarray or torch.tensor): (T samples x N variables) or (D datas x T samples x N variables) matrix.
+        X (np.ndarray or torch.Tensor): (T samples x N variables) or (D datas x T samples x N variables) matrix.
         covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
         T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
         min_order (int): Minimum order to compute (default: 3).
@@ -225,17 +223,17 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
             dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0, 
+            num_workers=num_workers, 
             pin_memory=device.type == 'cuda'
         )
 
         # calculate measurments for each batch
-        for bn, (partition_idxs, partition_covmats) in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
-            curr_bs = partition_covmats.shape[0]
-            partition_covmats = partition_covmats.to(device).view(curr_bs*D, order, order)
+        for bn, (nplets_idxs, nplets_covmats) in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
+            curr_bs = nplets_covmats.shape[0]
+            nplets_covmats = nplets_covmats.to(device, non_blocking=True).view(curr_bs*D, order, order)
 
             # Compute measures
-            res = _get_tc_dtc_from_batched_covmat(partition_covmats,
+            res = _get_tc_dtc_from_batched_covmat(nplets_covmats,
                                                   allmin1,
                                                   bc1[:curr_bs*D],
                                                   bcN[:curr_bs*D],
@@ -245,7 +243,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.tensor, List[np.ndarray], Li
             nplets_tc, nplets_dtc, nplets_o, nplets_s = res
 
             # Collect batch data
-            data = batch_data_collector(partition_idxs,
+            data = batch_data_collector(nplets_idxs,
                                         nplets_tc.view(curr_bs, D),
                                         nplets_dtc.view(curr_bs, D),
                                         nplets_o.view(curr_bs, D),

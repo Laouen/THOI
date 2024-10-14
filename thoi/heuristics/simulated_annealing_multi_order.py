@@ -55,7 +55,7 @@ def hot_encode_to_indexes(nplets):
     return indices
 
 
-def _evaluate_nplet_by_size(covmat: torch.tensor, T:int, batched_nplets: torch.tensor, metric:str, use_cpu:bool=False):
+def _evaluate_nplet_by_size(covmat: torch.Tensor, T:int, batched_nplets: torch.Tensor, metric:str, use_cpu:bool=False):
     split_nplets, sorted_indices = _split_by_hot_size(batched_nplets)
 
     # Convert nplets from hot encoding to indexes

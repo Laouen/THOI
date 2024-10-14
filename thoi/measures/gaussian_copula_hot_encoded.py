@@ -68,11 +68,11 @@ def _get_tc_dtc_from_batched_covmat(covmat: torch.Tensor,
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 @torch.no_grad()
-def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
-                    nplets: Optional[Union[np.ndarray,torch.tensor]] = None,
+def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor],
+                    nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                     T:Optional[int] = None,
                     covmat_precomputed:bool = False,
-                    bias_correctors: Optional[torch.tensor] = None,
+                    bias_correctors: Optional[torch.Tensor] = None,
                     use_cpu:bool = False):
 
     # Handle different options for X parameter
@@ -145,7 +145,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
     return results
 
 @torch.no_grad()
-def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
+def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor],
                          covmat_precomputed: bool=False,
                          T: Optional[int]=None,
                          min_order: int=3,
@@ -163,7 +163,7 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
         * S-information (S)
 
     Args:
-        X (np.ndarray or torch.tensor): T samples x N variables matrix. if not covmat_precomputed, it should be a numpy array.
+        X (np.ndarray or torch.Tensor): T samples x N variables matrix. if not covmat_precomputed, it should be a numpy array.
         covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
         T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
         min_order (int): Minimum order to compute (default: 3).
@@ -230,31 +230,31 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.tensor],
     )
     pbar = tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')
     batched_data = []
-    for bn, partition_idxs_hot_encoded in enumerate(pbar):
+    for bn, nplets_idxs_hot_encoded in enumerate(pbar):
         # |batch_size| x |N| x |N|
-        partition_idxs_hot_encoded = partition_idxs_hot_encoded.to(device)
+        nplets_idxs_hot_encoded = nplets_idxs_hot_encoded.to(device)
         
         # last batch can have less items than batch_size
-        if (partition_idxs_hot_encoded.shape[0] < batch_size):
-            identity_matrices = torch.eye(N, device=device).contiguous().unsqueeze(0).repeat(partition_idxs_hot_encoded.shape[0], 1, 1)
+        if (nplets_idxs_hot_encoded.shape[0] < batch_size):
+            identity_matrices = torch.eye(N, device=device).contiguous().unsqueeze(0).repeat(nplets_idxs_hot_encoded.shape[0], 1, 1)
         
-        diag_mask = (partition_idxs_hot_encoded == 0).unsqueeze(2).repeat(1, 1, N) * identity_matrices
-        mask = partition_idxs_hot_encoded.unsqueeze(2) * partition_idxs_hot_encoded.unsqueeze(1)
+        diag_mask = (nplets_idxs_hot_encoded == 0).unsqueeze(2).repeat(1, 1, N) * identity_matrices
+        mask = nplets_idxs_hot_encoded.unsqueeze(2) * nplets_idxs_hot_encoded.unsqueeze(1)
         partition_covmat = (mask * covmat) + diag_mask
         
         # Compute measures
-        orders = partition_idxs_hot_encoded.sum(dim=1).int()
+        orders = nplets_idxs_hot_encoded.sum(dim=1).int()
         
         bcN = bias_correctors[orders-1]
         bcNmin1 = bias_correctors[orders-2]
         
         # Batch process all nplets at once
         nplets_tc, nplets_dtc, nplets_o, nplets_s = _get_tc_dtc_from_batched_covmat(
-            partition_covmat, partition_idxs_hot_encoded, allmin1, bc1, bcN, bcNmin1
+            partition_covmat, nplets_idxs_hot_encoded, allmin1, bc1, bcN, bcNmin1
         )
         
         data = batch_data_collector(
-            partition_idxs_hot_encoded,
+            nplets_idxs_hot_encoded,
             nplets_tc,
             nplets_dtc,
             nplets_o,

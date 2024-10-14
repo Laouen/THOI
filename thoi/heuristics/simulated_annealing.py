@@ -67,7 +67,7 @@ def simulated_annealing(X: np.ndarray,
                         init_method:str = 'random', # lower_order, 'random', 'precumputed', 'precomputed_lower_order';
                         lower_order:int = None,
                         early_stop:int = 100,
-                        current_solution:Optional[torch.tensor] = None,
+                        current_solution:Optional[torch.Tensor] = None,
                         metric:str = 'o', # tc, dtc, o, s
                         largest:bool = False):
 

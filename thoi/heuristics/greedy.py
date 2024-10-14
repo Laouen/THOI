@@ -11,7 +11,7 @@ from thoi.heuristics.scoring import _evaluate_nplets
 from thoi.commons import _normalize_input_data
 
 @torch.no_grad()
-def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]],
+def greedy(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
            covmat_precomputed: bool=False,
            T: Optional[Union[int, List[int]]]=None,
            initial_order: int=3,
@@ -26,7 +26,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     Brief: Greedy algorithm to find the best order of nplets to maximize the metric for a given multivariate series or covariance matrices
     
     Parameters:
-    - X (Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+    - X (Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
     - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
     '''
@@ -48,10 +48,7 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
                                                                batch_data_collector=batch_data_collector,
                                                                batch_aggregation=batch_aggregation)
 
-    # Send elements to cuda if computing on GPU
-    covmats = covmats.to(device).contiguous()
-    current_solution = current_solution.to(device).contiguous()
-
+    # Set the order to the maximum order if not specified
     order = order if order is not None else N
 
     # Iterate over the remaining orders to get the best solution for each order
@@ -68,9 +65,9 @@ def greedy(X: Union[np.ndarray, torch.tensor, List[np.ndarray], List[torch.tenso
     return current_solution, torch.stack(best_scores).T
 
 
-def _next_order_greedy(covmats: torch.tensor,
+def _next_order_greedy(covmats: torch.Tensor,
                       T: Optional[List[int]],
-                      initial_solution: torch.tensor,
+                      initial_solution: torch.Tensor,
                       metric:Union[str,Callable],
                       largest:bool,
                       use_cpu:bool):
@@ -79,16 +76,16 @@ def _next_order_greedy(covmats: torch.tensor,
     Brief: Greedy algorithm to find the best candidate to add to the current solution
     
     Parameters:
-    - covmats (torch.tensor): The covariance matrix or matrixes with shape (D, N, N)
+    - covmats (torch.Tensor): The covariance matrix or matrixes with shape (D, N, N)
     - T (List[int]): The number of samples for each multivariate series
-    - initial_solution (torch.tensor): The initial solution with shape (batch_size, order)
+    - initial_solution (torch.Tensor): The initial solution with shape (batch_size, order)
     - metric (Union[str,Callable]): The metric to evaluate. One of tc, dtc, o, s or a callable function
     - largest (bool): A flag to indicate if the metric is to be maximized or minimized
     - use_cpu (bool): A flag to indicate if the computation should be done on the CPU
     
     Returns:
-    - best_candidates (torch.tensor): The best candidates to add to the current solution with shape (batch_size)
-    - best_score (torch.tensor): The best score for the best candidates with shape (batch_size)
+    - best_candidates (torch.Tensor): The best candidates to add to the current solution with shape (batch_size)
+    - best_score (torch.Tensor): The best score for the best candidates with shape (batch_size)
     '''
 
     # Get parameters attributes

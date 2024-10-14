@@ -8,15 +8,15 @@ from functools import partial
 import torch
 
 
-def _evaluate_nplets(covmats: torch.tensor,
+def _evaluate_nplets(covmats: torch.Tensor,
                      T: Optional[List[int]],
-                     batched_nplets: torch.tensor,
+                     batched_nplets: torch.Tensor,
                      metric: Union[str, Callable],
                      use_cpu:bool):
     """
-        covmats (torch.tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
+        covmats (torch.Tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
         T (Optional[List[int]]): The number of samples for each multivariate series or None
-        batched_nplets (torch.tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
+        batched_nplets (torch.Tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
         metric (str): The metric to evaluate. One of tc, dtc, o, s or Callable
     """
 
@@ -36,15 +36,15 @@ def _evaluate_nplets(covmats: torch.tensor,
     return metric_func(batched_measures).to(covmats.device)
 
 
-def _evaluate_nplet_hot_encoded(covmat: torch.tensor,
+def _evaluate_nplet_hot_encoded(covmat: torch.Tensor,
                                 T:int,
-                                batched_nplets: torch.tensor,
+                                batched_nplets: torch.Tensor,
                                 metric:str,
                                 use_cpu:bool):
 
     """
-        X (torch.tensor): The covariance matrix with shape (n_variables, n_variables)
-        batched_nplets (torch.tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
+        X (torch.Tensor): The covariance matrix with shape (n_variables, n_variables)
+        batched_nplets (torch.Tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
         metric (str): The metric to evaluate. One of tc, dtc, o or s
     """
 
