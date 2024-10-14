@@ -33,7 +33,7 @@ def _evaluate_nplets(covmats: torch.tensor,
                                        use_cpu=use_cpu)
     
     # |batch_size|
-    return metric_func(batched_measures)
+    return metric_func(batched_measures).to(covmats.device)
 
 
 def _evaluate_nplet_hot_encoded(covmat: torch.tensor,
