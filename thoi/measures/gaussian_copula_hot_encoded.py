@@ -260,7 +260,7 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.
     dataset = HotEncodedMultiOrderDataset(N, min_order, max_order, device=_get_device(use_cpu_dataset))
     dataloader = DataLoader(
         dataset,
-        batch_size=batch_size,
+        batch_size=min(batch_size, len(dataset)),
         shuffle=False,
         num_workers=num_workers,
         pin_memory=device.type == 'cuda' and dataset.device.type != 'cuda'

@@ -211,8 +211,8 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
     assert max_order <= N, f"max_order must be lower or equal than N. {max_order} > {N})"
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
 
+    # Ensure that final batch_size is smaller than the original batch_size 
     batch_size = batch_size // D
-    print('Effective batch size:', batch_size*D, 'for', D, 'datasets with batch size', batch_size, 'each')
 
     # To compute using pytorch, we need to compute each order separately
     batched_data = []
@@ -226,9 +226,9 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
         dataset = CovarianceDataset(N, order, device=_get_device(use_cpu_dataset))
         dataloader = DataLoader(
             dataset,
-            batch_size=batch_size,
+            batch_size=min(batch_size, len(dataset)),
             shuffle=False,
-            num_workers=num_workers, 
+            num_workers=num_workers,
             pin_memory=device.type == 'cuda' and dataset.device.type != 'cuda'
         )
 
