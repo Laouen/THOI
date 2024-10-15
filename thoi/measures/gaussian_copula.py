@@ -7,10 +7,39 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from thoi.commons import _normalize_input_data
+from thoi.commons import _normalize_input_data, _get_device
 from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
-from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _gaussian_entropy_bias_correction, _get_single_exclusion_covmats
+from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, \
+                                _gaussian_entropy_bias_correction, \
+                                _get_single_exclusion_covmats
+
+
+def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
+    
+    batch_size, order = nplets.shape
+    D, N = covmats.shape[:2]
+    
+    # Step 1: Expand nplets to match the dimensions needed for batch indexing
+    # nplets_expanded will be of shape (batch_size, D, order)
+    nplets_expanded = nplets.unsqueeze(1).expand(-1, D, -1)
+
+    # Step 2: Prepare covmats for batch indexing
+    # We need to gather elements along the N dimension
+    # First, expand covmats to shape (batch_size, D, N, N)
+    covmats_expanded = covmats.unsqueeze(0).expand(batch_size, -1, -1, -1)
+
+    # Step 3: Gather the rows
+    # indices_row will be of shape (batch_size, D, order, N)
+    indices_row = nplets_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
+    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
+
+    # Step 4: Gather the columns
+    # indices_col will be of shape (batch_size, D, order, order)
+    indices_col = nplets_expanded.unsqueeze(-2).expand(-1, -1, order, -1)
+    nplets_covmat = torch.gather(gathered_rows, 3, indices_col)
+    
+    return nplets_covmat
 
 
 def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
@@ -41,9 +70,9 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor
     batch_size, N = covmats.shape[:2]
 
     # Compute the sub covariance matrices for each variable and the system without that variable exclusion
-    # |batch_size| x |N|
+    # |batch_size| x |N| x |1| x |1|
     single_var_covmats = torch.diagonal(covmats, dim1=-2, dim2=-1).view(batch_size, N, 1, 1)
-    # |batch_size| x |N|
+    # |batch_size| x |N| x |N-1| x |N-1|
     single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
 
     # Compute the entropy of the system, the variavbles and the system without the variable
@@ -109,37 +138,16 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
     bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
-    ############################################################################
-    #######   Generate the covariance matrices for each nplet in the batch  ####
-    ############################################################################
-    
-    # Step 1: Expand nplets to match the dimensions needed for batch indexing
-    # nplets_expanded will be of shape (batch_size, D, order)
-    nplets_expanded = nplets.unsqueeze(1).expand(-1, D, -1)
+    # Create the covariance matrices for each nplet in the batch
+    # |batch_size| x |D| x |N| x |N|
+    nplets_covmats = _generate_nplets_covmants(covmats, nplets)
 
-    # Step 2: Prepare covmats for batch indexing
-    # We need to gather elements along the N dimension
-    # First, expand covmats to shape (batch_size, D, N, N)
-    covmats_expanded = covmats.unsqueeze(0).expand(batch_size, -1, -1, -1)
-
-    # Step 3: Gather the rows
-    # indices_row will be of shape (batch_size, D, order, N)
-    indices_row = nplets_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
-    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
-
-    # Step 4: Gather the columns
-    # indices_col will be of shape (batch_size, D, order, order)
-    indices_col = nplets_expanded.unsqueeze(-2).expand(-1, -1, order, -1)
-    nplets_covmat = torch.gather(gathered_rows, 3, indices_col)
-
-    ############################################################################
-    
-    # Pack results in a single batch
+    # Pack covmat in a single batch
     # |batch_size x D| x |order| x |order|
-    nplets_covmat = nplets_covmat.view(batch_size*D, order, order)
+    nplets_covmats = nplets_covmats.view(batch_size*D, order, order)
 
     # Batch process all nplets at once
-    measures = _get_tc_dtc_from_batched_covmat(nplets_covmat,
+    measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
                                                allmin1,
                                                bc1,
                                                bcN,
@@ -163,7 +171,7 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
                          max_order: Optional[int]=None,
                          batch_size: int = 1000000,
                          use_cpu: bool = False,
-                         dataset_device: str = 'cpu', # [cpu, cuda]
+                         use_cpu_dataset: bool = True,
                          batch_aggregation: Optional[Callable[[any],any]] = None,
                          batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None,
                          num_workers: int = 0):
@@ -215,36 +223,44 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
         bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
         # Generate dataset iterable
-        dataset = CovarianceDataset(covmats, order, use_cpu=dataset_device == 'cpu')
+        dataset = CovarianceDataset(N, order, device=_get_device(use_cpu_dataset))
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers, 
-            pin_memory=device.type == 'cuda' and dataset.covmats.device.type != 'cuda'
+            pin_memory=device.type == 'cuda' and dataset.device.type != 'cuda'
         )
 
         # calculate measurments for each batch
-        for bn, (nplets_idxs, nplets_covmats) in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
-            curr_bs = nplets_covmats.shape[0]
-            nplets_covmats = nplets_covmats.to(device, non_blocking=True).view(curr_bs*D, order, order)
+        for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
+            curr_batch_size = nplets.shape[0]
+            
+            # Create the covariance matrices for each nplet in the batch
+            # |curr_batch_size| x |D| x |N| x |N|
+            nplets_covmats = _generate_nplets_covmants(covmats, nplets)
+            
+            # Pack covmats in a single batch
+            # |curr_batch_size x D| x |N| x |N|
+            nplets_covmats = nplets_covmats.view(curr_batch_size*D, order, order)
 
-            # Compute measures
+            # Batch process all nplets at once
             res = _get_tc_dtc_from_batched_covmat(nplets_covmats,
                                                   allmin1,
-                                                  bc1[:curr_bs*D],
-                                                  bcN[:curr_bs*D],
-                                                  bcNmin1[:curr_bs*D])
+                                                  bc1[:curr_batch_size*D],
+                                                  bcN[:curr_batch_size*D],
+                                                  bcNmin1[:curr_batch_size*D])
 
             # Unpack results
+            # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
             nplets_tc, nplets_dtc, nplets_o, nplets_s = res
 
             # Collect batch data
-            data = batch_data_collector(nplets_idxs,
-                                        nplets_tc.view(curr_bs, D),
-                                        nplets_dtc.view(curr_bs, D),
-                                        nplets_o.view(curr_bs, D),
-                                        nplets_s.view(curr_bs, D),
+            data = batch_data_collector(nplets,
+                                        nplets_tc.view(curr_batch_size, D),
+                                        nplets_dtc.view(curr_batch_size, D),
+                                        nplets_o.view(curr_batch_size, D),
+                                        nplets_s.view(curr_batch_size, D),
                                         bn)
 
             # Append to batched data

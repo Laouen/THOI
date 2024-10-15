@@ -52,10 +52,10 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
         'o': nplets_o.detach().cpu().numpy().flatten(),
         's': nplets_s.detach().cpu().numpy().flatten()
     })
-
-    nplets_idxs = nplets_idxs.detach().cpu().numpy()
+    
     # Create a DataFrame with the n-plets
     if indexing_method == 'indexes':
+        nplets_idxs = nplets_idxs.detach().cpu().numpy()
         batch_size, order = nplets_idxs.shape
         bool_array = np.zeros((batch_size, N), dtype=bool)
         rows = np.arange(batch_size).reshape(-1, 1)
@@ -63,8 +63,8 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
         bool_array = np.repeat(bool_array, D, axis=0)
     else:
         bool_array = nplets_idxs.bool().detach().cpu().numpy()
-    df_vars = pd.DataFrame(bool_array, columns=columns)
 
+    df_vars = pd.DataFrame(bool_array, columns=columns)
 
     # Concat both dataframes columns and store in disk
     df = pd.concat([df_meas, df_vars], axis=1)
@@ -120,7 +120,7 @@ def top_k_nplets(nplets_idxs: torch.Tensor,
         values[indices]
     )
 
-# TODO: This function is used in simulated_annealing, check if its used in other places and if there is modifications to be done on these places
+
 def batch_to_tensor(nplets_idxs: torch.Tensor,
                     nplets_tc: torch.Tensor,
                     nplets_dtc: torch.Tensor,
@@ -131,7 +131,6 @@ def batch_to_tensor(nplets_idxs: torch.Tensor,
                     metric: Union[str,Callable]='o',
                     largest: bool=False):
 
-    # TODO: make this function to accept both a single or a list of inputs to use it for batches and for concat all batches
     # |batch_size| x |D|
     assert len(nplets_tc.shape) == len(nplets_dtc.shape) == len(nplets_o.shape) == len(nplets_s.shape) == 2, 'All nplets must be 2D tensors'
 
@@ -154,7 +153,7 @@ def batch_to_tensor(nplets_idxs: torch.Tensor,
     # |k x D x 4|, |k x N|
     return (nplets_measures, nplets_idxs, None)
 
-# TODO: This function is used in simulated_annealing, check if its used in other places and if there is modifications to be done on these places
+
 def concat_batched_tensors(batched_tensors: List[Tuple[torch.Tensor, torch.Tensor]],
                            top_k: Optional[int] = None,
                            metric: Optional[Union[str, Callable]] = 'o',
