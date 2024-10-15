@@ -178,9 +178,9 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
 
 @torch.no_grad()
 def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                                nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
-                                nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                                 use_cpu: bool = False):
 
     covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
@@ -250,7 +250,7 @@ def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.
 
     assert max_order <= N, f"max_order must be lower or equal than N. {max_order} > {N})"
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
-    
+
     batch_size = batch_size // D
     print('Effective batch size:', batch_size*D, 'for', D, 'datasets with batch size', batch_size, 'each')
 

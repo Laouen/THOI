@@ -99,9 +99,9 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor
 
 @torch.no_grad()
 def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                    nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
-                    nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
                     use_cpu: bool = False):
     
     '''

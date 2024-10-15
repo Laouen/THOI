@@ -27,36 +27,39 @@ def _evaluate_nplets(covmats: torch.Tensor,
 
     # |bached_nplets| x |D| x |4 = (tc, dtc, o, s)|
     batched_measures = nplets_measures(covmats,
+                                       nplets=batched_nplets,
                                        T=T,
                                        covmat_precomputed=True,
-                                       nplets=batched_nplets,
                                        use_cpu=use_cpu)
     
     # |batch_size|
     return metric_func(batched_measures).to(covmats.device)
 
 
-def _evaluate_nplet_hot_encoded(covmat: torch.Tensor,
+def _evaluate_nplet_hot_encoded(covmats: torch.Tensor,
                                 T:int,
                                 batched_nplets: torch.Tensor,
                                 metric:str,
                                 use_cpu:bool):
 
     """
-        X (torch.Tensor): The covariance matrix with shape (n_variables, n_variables)
+        covmats (torch.Tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
+        T (Optional[List[int]]): The number of samples for each multivariate series or None
         batched_nplets (torch.Tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
-        metric (str): The metric to evaluate. One of tc, dtc, o or s
+        metric (str): The metric to evaluate. One of tc, dtc, o, s or Callable
     """
 
-    # get the metric index to get from the result of nplets
-    METRICS = ['tc', 'dtc', 'o', 's']
-    metric_idx = METRICS.index(metric)
+    if len(covmats.shape) == 2:
+        covmats = covmats.unsqueeze(0)
 
-    # |batch_size| x |4 = (tc, dtc, o, s)|
-    batched_res = nplets_measures_hot_encoded(covmat, batched_nplets, T=T, covmat_precomputed=True, use_cpu=use_cpu)
+    metric_func = partial(_get_string_metric, metric=metric) if isinstance(metric, str) else metric
 
-    # Return minus the o information score to make it an maximum optimization (energy)
+    # |bached_nplets| x |D| x |4 = (tc, dtc, o, s)|
+    batched_measures = nplets_measures_hot_encoded(covmats,
+                                                   nplets=batched_nplets,
+                                                   T=T,
+                                                   covmat_precomputed=True,
+                                                   use_cpu=use_cpu)
+
     # |batch_size|
-    res = batched_res[:,metric_idx].flatten()
-
-    return res
+    return metric_func(batched_measures).to(covmats.device)

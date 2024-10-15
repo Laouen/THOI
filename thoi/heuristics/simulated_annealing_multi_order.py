@@ -1,9 +1,10 @@
+from typing import List, Union, Optional, Callable
 import numpy as np
 from tqdm import trange
 import torch
 
-from thoi.commons import gaussian_copula_covmat
-from thoi.heuristics.scoring import _evaluate_nplets, _evaluate_nplet_hot_encoded
+from thoi.commons import _normalize_input_data
+from thoi.heuristics.scoring import _evaluate_nplet_hot_encoded
 
 def _random_solutions(repeat, N, device):
     # Create a tensor of random 0s and 1s
@@ -18,35 +19,6 @@ def _random_solutions(repeat, N, device):
 
     return current_solution
 
-
-def _reorder_by_hot_sum(current_solutions):
-    # Calculate the sum of each vector
-    sums = current_solutions.sum(dim=1)
-    
-    # Get the sorted indices based on the sums
-    sorted_indices = torch.argsort(sums)
-    
-    # Reorder the current_solutions based on the sorted indices
-    reordered_solutions = current_solutions[sorted_indices]
-    reordered_sums = sums[sorted_indices]
-    
-    return reordered_solutions, reordered_sums, sorted_indices
-
-
-def _split_by_hot_size(current_solution):
-    reordered_solutions, reordered_sums, sorted_indices = _reorder_by_hot_sum(current_solution)
-
-    # Find unique sums and their counts
-    unique_sums, counts = torch.unique(reordered_sums, return_counts=True)
-    
-    split_solutions = []
-    start_idx = 0
-    for count in counts:
-        split_solutions.append(reordered_solutions[start_idx:start_idx + count])
-        start_idx += count
-    
-    return split_solutions, sorted_indices
-
 @torch.no_grad()
 def hot_encode_to_indexes(nplets):
     batch_size, N = nplets.shape
@@ -54,65 +26,32 @@ def hot_encode_to_indexes(nplets):
     indices = non_zero_indices[:, 1].view(batch_size, -1)
     return indices
 
-
-def _evaluate_nplet_by_size(covmat: torch.Tensor, T:int, batched_nplets: torch.Tensor, metric:str, use_cpu:bool=False):
-    split_nplets, sorted_indices = _split_by_hot_size(batched_nplets)
-
-    # Convert nplets from hot encoding to indexes
-    split_nplets = [hot_encode_to_indexes(nplets) for nplets in split_nplets]
-    
-    # Evaluate the splits
-    evaluated_splits = torch.cat([
-        _evaluate_nplets(covmat, T, nplets, metric, use_cpu)
-        for nplets in split_nplets
-    ])
-    
-    # Create a tensor to hold the results in the original order
-    results = torch.zeros_like(evaluated_splits)
-    
-    # Place the evaluated scores back into the original positions
-    results[sorted_indices] = evaluated_splits
-    
-    return results
-
 @torch.no_grad()
-def simulated_annealing_multi_order(X: np.ndarray,
-                                    initial_temp: float = 100.0,
-                                    cooling_rate: float = 0.99,
-                                    max_iterations: int = 1000,
-                                    step_size: int = 1,
+def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                                    covmat_precomputed: bool=False,
+                                    T: Optional[Union[int, List[int]]]=None,
+                                    initial_solution: Optional[torch.Tensor] = None,
                                     repeat: int = 10,
                                     use_cpu: bool = False,
+                                    max_iterations: int = 1000,
                                     early_stop: int = 100,
-                                    metric: str = 'o', # tc, dtc, o, s
-                                    evaluation_metod: str = 'hot_encoded', # indexes
+                                    initial_temp: float = 100.0,
+                                    cooling_rate: float = 0.99,
+                                    step_size: int = 1,
+                                    metric: Union[str,Callable]='o', # tc, dtc, o, s
                                     largest: bool = False):
 
-    assert metric in ['tc', 'dtc', 'o', 's'], f'metric must be one of tc, dtc, o or s. invalid value: {metric}'
-    assert evaluation_metod in ['hot_encoded', 'indexes'], f'evaluation_metod must be one of hot_encoded or indexes. invalid value: {evaluation_metod}'
-
-    evaluate_nplets = (
-        _evaluate_nplet_hot_encoded if evaluation_metod == 'hot_encoded'
-        else _evaluate_nplet_by_size
-    )
-
-    # make device cpu if not cuda available or cuda if available
-    using_GPU = torch.cuda.is_available() and not use_cpu
-    device = torch.device('cuda' if using_GPU else 'cpu')
-
-    T, N = X.shape
-
-    i_repeat = torch.arange(repeat).unsqueeze(1).expand(-1, step_size)
-
-    covmat = torch.from_numpy(gaussian_copula_covmat(X))
-    covmat = covmat.to(device).contiguous()
-
-    # generate a matrix with shape (repeat, N) of hot encoders for each element
-    # each row is a vector of 0s and 1s where 1s are the elements in the solution
-    current_solution = _random_solutions(repeat, N, device)
+    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
+    
+    # Compute current solution
+    # |batch_size| x |order|
+    if initial_solution is None:
+        current_solution = _random_solutions(repeat, N, device)
+    else:
+        current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = evaluate_nplets(covmat, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, use_cpu=use_cpu)
 
     if not largest:
         current_energy = -current_energy
@@ -125,6 +64,10 @@ def simulated_annealing_multi_order(X: np.ndarray,
     best_solution = current_solution.clone()
     # |batch_size|
     best_energy = current_energy.clone()
+    
+    # Repeat tensor for indexing the current_solution
+    # |repeat| x |step_size|
+    i_repeat = torch.arange(repeat).unsqueeze(1).expand(-1, step_size)
 
     no_progress_count = 0
     pbar = trange(max_iterations, leave=True)
@@ -143,7 +86,7 @@ def simulated_annealing_multi_order(X: np.ndarray,
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = evaluate_nplets(covmat, T, current_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, use_cpu=use_cpu)
 
         if not largest:
             new_energy = -new_energy
