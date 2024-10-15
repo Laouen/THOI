@@ -10,66 +10,60 @@ from torch.utils.data import DataLoader
 from thoi.commons import _normalize_input_data
 from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
-from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _get_bias_correctors
+from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, _gaussian_entropy_bias_correction, _get_single_exclusion_covmats
 
 
-def _get_single_exclusion_covmats(covmats: torch.Tensor, allmin1: torch.Tensor):
-    
-    batch_size, N, _ = covmats.shape
-    
-    # Step 1: Expand allmin1 to match the batch size
-    # Shape: (batch_size, N, N-1)
-    allmin1_expanded = allmin1.unsqueeze(0).expand(batch_size, -1, -1)
+def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
+    if T is not None:
+        # |batch_size|
+        bc1 = torch.tensor([_gaussian_entropy_bias_correction(1,t) for t in T], device=device)
+        bcN = torch.tensor([_gaussian_entropy_bias_correction(order,t) for t in T], device=device)
+        bcNmin1 = torch.tensor([_gaussian_entropy_bias_correction(order-1,t) for t in T], device=device)
+    else:
+        # |batch_size|
+        bc1 = torch.tensor([0] * D, device=device)
+        bcN = torch.tensor([0] * D, device=device)
+        bcNmin1 = torch.tensor([0] * D, device=device)
 
-    # Step 2: Expand covmats to include the N dimension for variable exclusion
-    # Shape: (batch_size, N, N, N)
-    covmats_expanded = covmats.unsqueeze(1).expand(-1, N, -1, -1)
+    # |batch_size x D|
+    bc1 = bc1.repeat(batch_size)
+    bcN = bcN.repeat(batch_size)
+    bcNmin1 = bcNmin1.repeat(batch_size)
 
-    # Step 3: Gather the rows corresponding to the indices in allmin1
-    # Shape of indices_row: (batch_size, N, N-1, N)
-    indices_row = allmin1_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
-    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
-
-    # Step 4: Gather the columns corresponding to the indices in allmin1
-    # Shape of indices_col: (batch_size, N, N-1, N-1)
-    indices_col = allmin1_expanded.unsqueeze(-2).expand(-1, -1, N-1, -1)
-    covmats_sub = torch.gather(gathered_rows, 3, indices_col)
-    
-    # |bz| x |N| x |N-1| x |N-1|
-    return covmats_sub
+    return bc1, bcN, bcNmin1
 
 
 def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor, bc1: torch.Tensor, bcN: torch.Tensor, bcNmin1: torch.Tensor):
 
     # covmat is a batch of covariance matrices
-    # |bz| x |N| x |N|
+    # |batch_size| x |N| x |N|
 
     batch_size, N = covmats.shape[:2]
 
     # Compute the sub covariance matrices for each variable and the system without that variable exclusion
-    # |bz| x |N|
+    # |batch_size| x |N|
     single_var_covmats = torch.diagonal(covmats, dim1=-2, dim2=-1).view(batch_size, N, 1, 1)
-    # |bz| x |N|
+    # |batch_size| x |N|
     single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
 
     # Compute the entropy of the system, the variavbles and the system without the variable
-    # |bz|
+    # |batch_size|
     sys_ent = _gaussian_entropy_estimation(covmats, N) - bcN
     # TODO: This could be calculated once at the begining and then accessed here.
-    # |bz| x |N|
+    # |batch_size| x |N|
     var_ents = _gaussian_entropy_estimation(single_var_covmats, 1) - bc1.unsqueeze(1)
-    # |bz| x |N|
+    # |batch_size| x |N|
     single_exclusion_ents = _gaussian_entropy_estimation(single_exclusion_covmats, N-1) - bcNmin1.unsqueeze(1)
 
-    # |bz|
+    # |batch_size|
     nplet_tc = torch.sum(var_ents, dim=1) - sys_ent
     # TODO: inf - inf return NaN in pytorch. Check how should I handle this.
-    # |bz|
+    # |batch_size|
     nplet_dtc = torch.sum(single_exclusion_ents, dim=1) - (N-1.0)*sys_ent
 
-    # |bz|
+    # |batch_size|
     nplet_o = nplet_tc - nplet_dtc
-    # |bz|
+    # |batch_size|
     nplet_s = nplet_tc + nplet_dtc
 
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
@@ -95,11 +89,7 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
     - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
     '''
     
-    # nplets must be a batched tensor
-    assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
-    
     covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
-    batch_size, order = nplets.shape
 
     # If no nplets, then compute for the entire systems
     if nplets is None:
@@ -107,11 +97,16 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
     else:
         # If nplets are not tensors, convert to tensor
         nplets = torch.as_tensor(nplets).to(device).contiguous()
-    
+        
+    # nplets must be a batched tensor
+    assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
+    batch_size, order = nplets.shape
+
     # Create marginal indexes
     allmin1 = _all_min_1_ids(order, device=device)
 
     # Create bias corrector values
+    # |batch_size x D|, |batch_size x D|, |batch_size x D|
     bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
     ############################################################################
@@ -140,6 +135,7 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
     ############################################################################
     
     # Pack results in a single batch
+    # |batch_size x D| x |order| x |order|
     nplets_covmat = nplets_covmat.view(batch_size*D, order, order)
 
     # Batch process all nplets at once
@@ -150,7 +146,7 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
                                                bcNmin1)
 
     # Unpack results
-    # |batch_size*D|, |batch_size*D|, |batch_size*D|, |batch_size*D|
+    # |batch_size x D|, |batch_size x D|, |batch_size x D|, |batch_size x D|
     nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
 
     # |batch_size| x |D| x |4 = (tc, dtc, o, s)|

@@ -1,4 +1,3 @@
-from typing import List, Union, Optional
 import numpy as np
 import scipy as sp
 import torch
@@ -24,21 +23,27 @@ def _gaussian_entropy_estimation(covmats, N):
     return 0.5 * (N*torch.log(TWOPIE) + torch.logdet(covmats))
 
 
-def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
-    if T is not None:
-        bc1 = torch.tensor([_gaussian_entropy_bias_correction(1,t) for t in T], device=device)
-        bcN = torch.tensor([_gaussian_entropy_bias_correction(order,t) for t in T], device=device)
-        bcNmin1 = torch.tensor([_gaussian_entropy_bias_correction(order-1,t) for t in T], device=device)
-    else:
-        bc1 = torch.tensor([0] * D, device=device)
-        bcN = torch.tensor([0] * D, device=device)
-        bcNmin1 = torch.tensor([0] * D, device=device)
+def _get_single_exclusion_covmats(covmats: torch.Tensor, allmin1: torch.Tensor):
 
-    # Make bc1 a tensor with [*bc1, *bc1, ...] bach_size times to broadcast with the batched data
-    bc1 = bc1.repeat(batch_size)
-    bcN = bcN.repeat(batch_size)
-    bcNmin1 = bcNmin1.repeat(batch_size)
+    batch_size, N, _ = covmats.shape
 
-    return bc1, bcN, bcNmin1
+    # Step 1: Expand allmin1 to match the batch size
+    # Shape: (batch_size, N, N-1)
+    allmin1_expanded = allmin1.unsqueeze(0).expand(batch_size, -1, -1)
 
+    # Step 2: Expand covmats to include the N dimension for variable exclusion
+    # Shape: (batch_size, N, N, N)
+    covmats_expanded = covmats.unsqueeze(1).expand(-1, N, -1, -1)
 
+    # Step 3: Gather the rows corresponding to the indices in allmin1
+    # Shape of indices_row: (batch_size, N, N-1, N)
+    indices_row = allmin1_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
+    gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
+
+    # Step 4: Gather the columns corresponding to the indices in allmin1
+    # Shape of indices_col: (batch_size, N, N-1, N-1)
+    indices_col = allmin1_expanded.unsqueeze(-2).expand(-1, -1, N-1, -1)
+    covmats_sub = torch.gather(gathered_rows, 3, indices_col)
+
+    # |bz| x |N| x |N-1| x |N-1|
+    return covmats_sub
