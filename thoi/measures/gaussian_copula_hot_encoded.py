@@ -110,7 +110,6 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
     # |batch_size|
     sys_ent = _multivariate_gaussian_entropy(covmats, N) - bcOrder
     sys_ent.sub_(n_masked * GAUS_ENTR_NORMAL)
-    # TODO: This could be calculated once at the begining and then accessed here.
     # |batch_size| x |N|
     var_ents = _univariate_gaussian_entropy(single_var_covmats) - bc1.unsqueeze(1)
     var_ents.mul_(nplet_mask)
@@ -206,7 +205,6 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
     
     # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
     return torch.stack(measures, dim=-1)
-
 
 @torch.no_grad()
 def multi_order_measures_hot_encoded(X: TensorLikeArray,
