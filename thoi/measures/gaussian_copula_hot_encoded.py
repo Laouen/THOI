@@ -85,12 +85,18 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
                                     bc1: float, 
                                     bcOrder: float, 
                                     bcOrdermin1: float):
-
-    # covmat is a batch of covariance matrices
-    # |batch_size| x |N| x |N|
-
-    # nplets is a batch of nplets
-    # |batch_size| x |N|
+    '''
+    Brief: Compute the total correlation (tc), dual total correlation (dtc), o-information (o) and s-information (s) for the given batch of covariance matrices.
+    
+    Parameters:
+    - covmats (torch.Tensor): The covariance matrices with shape (batch_size, N, N)
+    - orders (torch.Tensor): The order of each bached covmant (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
+    - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (batch_size, N, N-1)
+    - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size)
+    - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size)
+    - bcNmin1 (torch.Tensor): The bias corrector for the order-1 with shape (batch_size)
+    - marginal_entropies (Optional[torch.Tensor]): The marginal entropies for each variable with shape (batch_size, N). If None, it will be dynamically computed
+    '''
 
     batch_size, N = covmats.shape[:2]
  

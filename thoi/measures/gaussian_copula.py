@@ -23,17 +23,17 @@ def _generate_nplets_marginal_entropies(marginal_entropies: torch.Tensor, nplets
     D, N = marginal_entropies.shape
     batch_size, O = nplets.shape
     
-    # Step 1: Expand entropies to (batch_size, D, N)
-    # This creates a view without copying data
-    entropies_expanded = marginal_entropies.unsqueeze(0).expand(batch_size, D, N)  # Shape: (batch_size, D, N)
+    # Expand entropies
+    # |batch_size| x |D| x |N|
+    entropies_expanded = marginal_entropies.unsqueeze(0).expand(batch_size, D, N)
 
-    # Step 2: Expand nplets to (batch_size, D, O)
-    # Each nplet is repeated across the D dimension
-    nplets_expanded = nplets.unsqueeze(1).expand(batch_size, D, O)  # Shape: (batch_size, D, O)
+    # Expand nplets and repeat them across the D dimensions
+    # |batch_size| x |D| x |O|
+    nplets_expanded = nplets.unsqueeze(1).expand(batch_size, D, O)
 
-    # Step 3: Gather the entropies based on nplets indices
-    # torch.gather picks elements from entropies_expanded along dim=2 (N dimension) using nplets_expanded as indices
-    nplets_marginal_entropies = torch.gather(entropies_expanded, dim=2, index=nplets_expanded)  # Shape: (batch_size, D, O)
+    # Gather the entropies based on nplets indices
+    # |batch_size| x |D| x |O|
+    nplets_marginal_entropies = torch.gather(entropies_expanded, dim=2, index=nplets_expanded)
 
     return nplets_marginal_entropies
     
@@ -43,22 +43,21 @@ def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     batch_size, order = nplets.shape
     D, N = covmats.shape[:2]
     
-    # Step 1: Expand nplets to match the dimensions needed for batch indexing
-    # nplets_expanded will be of shape (batch_size, D, order)
+    # Expand nplets to match the dimensions needed for batch indexing
+    # |batch_size| x |D| x |order|
     nplets_expanded = nplets.unsqueeze(1).expand(-1, D, -1)
 
-    # Step 2: Prepare covmats for batch indexing
-    # We need to gather elements along the N dimension
-    # First, expand covmats to shape (batch_size, D, N, N)
+    # Prepare covmats for batch indexing to gather elements along the N dimension
+    # |batch_size| x |D| x |N| x |N|
     covmats_expanded = covmats.unsqueeze(0).expand(batch_size, -1, -1, -1)
 
-    # Step 3: Gather the rows
-    # indices_row will be of shape (batch_size, D, order, N)
+    # Gather the rows
+    # |batch_size| x |D| x |order| x |N|
     indices_row = nplets_expanded.unsqueeze(-1).expand(-1, -1, -1, N)
     gathered_rows = torch.gather(covmats_expanded, 2, indices_row)
 
-    # Step 4: Gather the columns
-    # indices_col will be of shape (batch_size, D, order, order)
+    # Gather the columns
+    # |batch_size| x |D| x |order| x |order|
     indices_col = nplets_expanded.unsqueeze(-2).expand(-1, -1, order, -1)
     nplets_covmat = torch.gather(gathered_rows, 3, indices_col)
     
@@ -92,11 +91,17 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
                                     bcNmin1: torch.Tensor,
                                     marginal_entropies: Optional[torch.Tensor] = None):
 
-    # marginal_entripies has shape
-    # |D| x |N|
-
-    # covmat is a batch of covariance matrices
-    # |batch_size| x |N| x |N|
+    '''
+    Brief: Compute the total correlation (tc), dual total correlation (dtc), o-information (o) and s-information (s) for the given batch of covariance matrices.
+    
+    Parameters:
+    - covmats (torch.Tensor): The covariance matrices with shape (batch_size, N, N)
+    - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (batch_size, N, N-1)
+    - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size)
+    - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size)
+    - bcNmin1 (torch.Tensor): The bias corrector for the order-1 with shape (batch_size)
+    - marginal_entropies (Optional[torch.Tensor]): The marginal entropies for each variable with shape (batch_size, N). If None, it will be dynamically computed
+    '''
 
     N = covmats.shape[1]
 
