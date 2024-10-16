@@ -11,7 +11,9 @@ from thoi.typing import TensorLikeArray
 from thoi.commons import _normalize_input_data, _get_device
 from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
-from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_estimation, \
+from thoi.measures.utils import _all_min_1_ids, \
+                                _multivariate_gaussian_entropy, \
+                                _univariate_gaussian_entropy, \
                                 _gaussian_entropy_bias_correction, \
                                 _get_single_exclusion_covmats
 
@@ -68,22 +70,22 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor
     # covmat is a batch of covariance matrices
     # |batch_size| x |N| x |N|
 
-    batch_size, N = covmats.shape[:2]
+    N = covmats.shape[1]
 
     # Compute the sub covariance matrices for each variable and the system without that variable exclusion
-    # |batch_size| x |N| x |1| x |1|
-    single_var_covmats = torch.diagonal(covmats, dim1=-2, dim2=-1).view(batch_size, N, 1, 1)
+    # |batch_size| x |N|
+    single_var_variances = torch.diagonal(covmats, dim1=-2, dim2=-1)
     # |batch_size| x |N| x |N-1| x |N-1|
     single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
 
     # Compute the entropy of the system, the variavbles and the system without the variable
     # |batch_size|
-    sys_ent = _gaussian_entropy_estimation(covmats, N) - bcN
+    sys_ent = _multivariate_gaussian_entropy(covmats, N) - bcN
     # TODO: This could be calculated once at the begining and then accessed here.
     # |batch_size| x |N|
-    var_ents = _gaussian_entropy_estimation(single_var_covmats, 1) - bc1.unsqueeze(1)
+    var_ents = _univariate_gaussian_entropy(single_var_variances) - bc1.unsqueeze(1)
     # |batch_size| x |N|
-    single_exclusion_ents = _gaussian_entropy_estimation(single_exclusion_covmats, N-1) - bcNmin1.unsqueeze(1)
+    single_exclusion_ents = _multivariate_gaussian_entropy(single_exclusion_covmats, N-1) - bcNmin1.unsqueeze(1)
 
     # |batch_size|
     nplet_tc = torch.sum(var_ents, dim=1) - sys_ent

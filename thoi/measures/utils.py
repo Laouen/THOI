@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 import torch
 
-from thoi.measures.constants import TWOPIE
+from thoi.measures.constants import LOGTWOPIE, TWOPIE
 
 
 def _all_min_1_ids(N: torch.device, device: torch.device=torch.device('cpu')):
@@ -19,8 +19,12 @@ def _gaussian_entropy_bias_correction(N,T):
     return torch.tensor((N*np.log(2/(T-1)) + np.sum(psiterms))/2)
 
 
-def _gaussian_entropy_estimation(covmats, N):
-    return 0.5 * (N*torch.log(TWOPIE) + torch.logdet(covmats))
+def _univariate_gaussian_entropy(variances):
+    return 0.5 * (torch.log(TWOPIE * variances))
+
+
+def _multivariate_gaussian_entropy(covmats, N):
+    return 0.5 * (N*LOGTWOPIE + torch.logdet(covmats))
 
 
 def _get_single_exclusion_covmats(covmats: torch.Tensor, allmin1: torch.Tensor):
