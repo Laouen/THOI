@@ -14,9 +14,29 @@ from thoi.collectors import batch_to_csv, concat_and_sort_csv
 from thoi.measures.utils import _all_min_1_ids, \
                                 _multivariate_gaussian_entropy, \
                                 _univariate_gaussian_entropy, \
+                                _marginal_gaussian_entropies, \
                                 _gaussian_entropy_bias_correction, \
                                 _get_single_exclusion_covmats
 
+def _generate_nplets_marginal_entropies(marginal_entropies: torch.Tensor, nplets: torch.Tensor):
+    
+    D, N = marginal_entropies.shape
+    batch_size, O = nplets.shape
+    
+    # Step 1: Expand entropies to (batch_size, D, N)
+    # This creates a view without copying data
+    entropies_expanded = marginal_entropies.unsqueeze(0).expand(batch_size, D, N)  # Shape: (batch_size, D, N)
+
+    # Step 2: Expand nplets to (batch_size, D, O)
+    # Each nplet is repeated across the D dimension
+    nplets_expanded = nplets.unsqueeze(1).expand(batch_size, D, O)  # Shape: (batch_size, D, O)
+
+    # Step 3: Gather the entropies based on nplets indices
+    # torch.gather picks elements from entropies_expanded along dim=2 (N dimension) using nplets_expanded as indices
+    nplets_marginal_entropies = torch.gather(entropies_expanded, dim=2, index=nplets_expanded)  # Shape: (batch_size, D, O)
+
+    return nplets_marginal_entropies
+    
 
 def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     
@@ -65,30 +85,39 @@ def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D:
     return bc1, bcN, bcNmin1
 
 
-def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor, bc1: torch.Tensor, bcN: torch.Tensor, bcNmin1: torch.Tensor):
+def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
+                                    allmin1: torch.Tensor,
+                                    bc1: torch.Tensor,
+                                    bcN: torch.Tensor,
+                                    bcNmin1: torch.Tensor,
+                                    marginal_entropies: Optional[torch.Tensor] = None):
+
+    # marginal_entripies has shape
+    # |D| x |N|
 
     # covmat is a batch of covariance matrices
     # |batch_size| x |N| x |N|
 
     N = covmats.shape[1]
 
-    # Compute the sub covariance matrices for each variable and the system without that variable exclusion
-    # |batch_size| x |N|
-    single_var_variances = torch.diagonal(covmats, dim1=-2, dim2=-1)
-    # |batch_size| x |N| x |N-1| x |N-1|
-    single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
-
-    # Compute the entropy of the system, the variavbles and the system without the variable
+    # Compute the entire system entropy
     # |batch_size|
     sys_ent = _multivariate_gaussian_entropy(covmats, N) - bcN
-    # TODO: This could be calculated once at the begining and then accessed here.
+    
+    # Compute the single variables entropy
     # |batch_size| x |N|
-    var_ents = _univariate_gaussian_entropy(single_var_variances) - bc1.unsqueeze(1)
+    if marginal_entropies is None:
+        single_var_variances = torch.diagonal(covmats, dim1=-2, dim2=-1)
+        marginal_entropies = _univariate_gaussian_entropy(single_var_variances)
+    marginal_entropies.sub_(bc1.unsqueeze(1))
+    
+    # Compute the single exclusion entropies
     # |batch_size| x |N|
+    single_exclusion_covmats = _get_single_exclusion_covmats(covmats, allmin1)
     single_exclusion_ents = _multivariate_gaussian_entropy(single_exclusion_covmats, N-1) - bcNmin1.unsqueeze(1)
 
     # |batch_size|
-    nplet_tc = torch.sum(var_ents, dim=1) - sys_ent
+    nplet_tc = torch.sum(marginal_entropies, dim=1) - sys_ent
     # TODO: inf - inf return NaN in pytorch. Check how should I handle this.
     # |batch_size|
     nplet_dtc = torch.sum(single_exclusion_ents, dim=1) - (N-1.0)*sys_ent
@@ -202,6 +231,10 @@ def multi_order_measures(X: TensorLikeArray,
     """
 
     covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
+    
+    # For each dataset, precompute the single variable marginal gaussian entropies
+    # |D| x |N|
+    marginal_entropies = _marginal_gaussian_entropies(covmats)
 
     max_order = N if max_order is None else max_order
 
@@ -245,21 +278,27 @@ def multi_order_measures(X: TensorLikeArray,
             # Create the covariance matrices for each nplet in the batch
             # |curr_batch_size| x |D| x |N| x |N|
             nplets_covmats = _generate_nplets_covmants(covmats, nplets)
+            
+            # Create the marginal entropies sampling from the marginal_entropies tensor
+            # |curr_batch_size| x |D| x |order|
+            nplets_marginal_entropies = _generate_nplets_marginal_entropies(marginal_entropies, nplets)
 
-            # Pack covmats in a single batch
+            # Pack covmats and marginal entropies in a single batch
             # |curr_batch_size x D| x |N| x |N|
             nplets_covmats = nplets_covmats.view(curr_batch_size*D, order, order)
+            nplets_marginal_entropies = nplets_marginal_entropies.view(curr_batch_size*D, order)
 
             # Batch process all nplets at once
-            res = _get_tc_dtc_from_batched_covmat(nplets_covmats,
-                                                  allmin1,
-                                                  bc1[:curr_batch_size*D],
-                                                  bcN[:curr_batch_size*D],
-                                                  bcNmin1[:curr_batch_size*D])
+            measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
+                                                       allmin1,
+                                                       bc1[:curr_batch_size*D],
+                                                       bcN[:curr_batch_size*D],
+                                                       bcNmin1[:curr_batch_size*D],
+                                                       nplets_marginal_entropies)
 
             # Unpack results
             # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
-            nplets_tc, nplets_dtc, nplets_o, nplets_s = res
+            nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
 
             # Collect batch data
             data = batch_data_collector(nplets,

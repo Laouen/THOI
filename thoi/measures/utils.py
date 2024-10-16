@@ -19,6 +19,12 @@ def _gaussian_entropy_bias_correction(N,T):
     return torch.tensor((N*np.log(2/(T-1)) + np.sum(psiterms))/2)
 
 
+def _marginal_gaussian_entropies(covmats: torch.Tensor):
+    D, N = covmats.shape[:2]
+    return _univariate_gaussian_entropy(
+        torch.diagonal(covmats, dim1=-2, dim2=-1))
+
+
 def _univariate_gaussian_entropy(variances):
     return 0.5 * (torch.log(TWOPIE * variances))
 
