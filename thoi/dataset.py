@@ -65,27 +65,3 @@ class HotEncodedMultiOrderDataset(IterableDataset):
                 nplets_hot_encoded[list(nplets)] = 1
                 
                 yield nplets_hot_encoded
-
-
-class NpletsCovariancesDataset(IterableDataset):
-    def __init__(self, covmat: torch.Tensor, nplets: torch.Tensor):
-
-        assert covmat.device == nplets.device, 'covariance and nplets'
-
-        self.covmat = covmat
-        self.nplets = nplets
-
-    def __len__(self):
-        """Returns the number of combinations of features of the specified order."""
-        return len(self.nplets)
-
-    def __iter__(self):
-        """
-        Iterate over all combinations of features in the dataset.
-
-        Yields:
-            tuple: A tuple containing:
-                partition_covmat (np.ndarray): The subcovmat of the covariance matrix corresponding to the current combination, shape (order, order).
-        """
-        for nplets_idxs in self.nplets:
-            yield self.covmat[nplets_idxs][:,nplets_idxs]
