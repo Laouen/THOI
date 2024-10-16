@@ -28,6 +28,7 @@ def hot_encode_to_indexes(nplets):
 
 @torch.no_grad()
 def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                                    *,
                                     covmat_precomputed: bool=False,
                                     T: Optional[Union[int, List[int]]]=None,
                                     initial_solution: Optional[torch.Tensor] = None,

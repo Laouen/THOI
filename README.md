@@ -60,28 +60,28 @@ import numpy as np
 
 X = np.random.normal(0,1, (1000, 10))
 
-# Computation of O information for the entire system
+# Computation of O information for the nplet that consider all the variables of X
 measures = nplets_measures(X)
 
-# Computation of O info for the sub-system composed by 0, 1 and 3
-measures = nplets_measures(X, [0,1,3])
+# Computation of O info for a single nplet (it must be a list of nplets even if it is a single nplet)
+measures = nplets_measures(X, [[0,1,3]])
 
-# Computation of O info for the sub-system composed by 0, 1 and 3
+# Computation of O info for multiple nplets
 measures = nplets_measures(X, [[0,1,3],[3,7,4],[2,6,3]])
 
-# Extensive computation of O information measures over all combinations of X
+# Extensive computation of O information measures over all combinations of features in X
 measures = multi_order_measures(X)
 
-# compute the best 10 combinations using greedy, starting by exaustive search in 
+# Compute the best 10 combinations of features (nplet) using greedy, starting by exaustive search in 
 # lower order and building from there. Result shows best O information for 
 # each built optimal orders
-best_partitions, best_scores = greedy(X, 3, 5, repeat=10)
+best_nplets, best_scores = greedy(X, 3, 5, repeat=10)
 
-# compute the best 10 combinations using simulated annealing: There are two initialization options
-# 1. Starting by exaustive search in lower order, then building with gready.
-# 2. Selection random sample of initial solutions.
+# Compute the best 10 combinations of features (nplet) using simulated annealing: There are two initialization options
+# 1. Starting by a custom initial solution with shape (repeat, order) explicitely provided by the user.
+# 2. Selecting random samples from the order.
 # Result shows best O information for each built optimal orders
-best_partitions, best_scores = simulated_annealing(X, 5, repeat=10)
+best_nplets, best_scores = simulated_annealing(X, 5, repeat=10)
 ```
 
 For detailed usage and examples, please refer to the [documentation](https://github.com/Laouen/THOI).

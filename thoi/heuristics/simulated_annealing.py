@@ -18,10 +18,11 @@ def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=N
 
 @torch.no_grad()
 def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+                        order: Optional[int]=None,
+                        *,
                         covmat_precomputed: bool=False,
                         T: Optional[Union[int, List[int]]]=None,
                         initial_solution: Optional[torch.Tensor] = None,
-                        order: Optional[int]=None,
                         repeat: int = 10,
                         use_cpu: bool = False,
                         max_iterations: int = 1000,

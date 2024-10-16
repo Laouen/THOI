@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from thoi.typing import TensorLikeArray
 from thoi.dataset import HotEncodedMultiOrderDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
 from thoi.measures.utils import _all_min_1_ids, _gaussian_entropy_bias_correction, _gaussian_entropy_estimation, _get_single_exclusion_covmats
@@ -177,8 +178,8 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
     )
 
 @torch.no_grad()
-def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
-                                nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
+def nplets_measures_hot_encoded(X: TensorLikeArray,
+                                nplets: Optional[TensorLikeArray] = None,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
                                 use_cpu: bool = False):
@@ -204,7 +205,7 @@ def nplets_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.ndarr
 
 
 @torch.no_grad()
-def multi_order_measures_hot_encoded(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+def multi_order_measures_hot_encoded(X: TensorLikeArray,
                                      covmat_precomputed: bool=False,
                                      T: Optional[int]=None,
                                      min_order: int=3,

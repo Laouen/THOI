@@ -12,10 +12,11 @@ from thoi.commons import _normalize_input_data
 
 @torch.no_grad()
 def greedy(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
-           covmat_precomputed: bool=False,
-           T: Optional[Union[int, List[int]]]=None,
            initial_order: int=3,
            order: Optional[int]=None,
+           *,
+           covmat_precomputed: bool=False,
+           T: Optional[Union[int, List[int]]]=None,
            repeat: int=10,
            use_cpu: bool=False,
            batch_size: int=1000000,

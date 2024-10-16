@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from thoi.typing import TensorLikeArray
 from thoi.commons import _normalize_input_data, _get_device
 from thoi.dataset import CovarianceDataset
 from thoi.collectors import batch_to_csv, concat_and_sort_csv
@@ -98,8 +99,8 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor, allmin1: torch.Tensor
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
 @torch.no_grad()
-def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
-                    nplets: Optional[Union[np.ndarray,torch.Tensor]] = None,
+def nplets_measures(X: Union[TensorLikeArray],
+                    nplets: Optional[TensorLikeArray] = None,
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
                     use_cpu: bool = False):
@@ -164,7 +165,7 @@ def nplets_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[to
                         nplets_s.view(batch_size, D)], dim=-1)
 
 @torch.no_grad()
-def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+def multi_order_measures(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          min_order: int=3,
@@ -235,11 +236,14 @@ def multi_order_measures(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Li
         # calculate measurments for each batch
         for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
             curr_batch_size = nplets.shape[0]
-            
+
+            # Send nplets to the device in case it is not there
+            nplets = nplets.to(device)
+
             # Create the covariance matrices for each nplet in the batch
             # |curr_batch_size| x |D| x |N| x |N|
             nplets_covmats = _generate_nplets_covmants(covmats, nplets)
-            
+
             # Pack covmats in a single batch
             # |curr_batch_size x D| x |N| x |N|
             nplets_covmats = nplets_covmats.view(curr_batch_size*D, order, order)

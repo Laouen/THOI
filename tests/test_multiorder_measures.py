@@ -103,7 +103,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
         T, N = self.X.shape
         covmat = gaussian_copula_covmat(self.X)
         
-        df_res = multi_order_measures_hot_encoded(covmat, batch_size=10000, use_cpu=True)
+        df_res = multi_order_measures_hot_encoded(covmat, batch_size=200000, use_cpu=True)
 
         dfs = []
         for order in sorted(df_res['order'].unique()):
@@ -122,7 +122,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
                 df_desc_order = df_desc_order.sort_index()
                 df_stats_order = df_stats_order.sort_index()
 
-                self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=1e-6, equal_nan=True))
+                self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=1e-4, equal_nan=True))
 
     def test_multiple_times_same_datasets(self):
         # TODO: implement

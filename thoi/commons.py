@@ -3,6 +3,8 @@ import numpy as np
 import scipy as sp
 import torch
 
+from thoi.typing import TensorLikeArray
+
 
 def _get_string_metric(batched_res: np.ndarray, metric:str):
     '''
@@ -60,8 +62,7 @@ def _to_numpy(X):
         return X.detach().cpu().numpy()
     elif isinstance(X, np.ndarray):
         return X
-    else:
-        raise TypeError(f"Unsupported type: {type(X)}")
+    return np.array(X)
 
 def _get_device(use_cpu:bool=False):
     """Set the use of GPU if available"""
@@ -69,7 +70,7 @@ def _get_device(use_cpu:bool=False):
     device = torch.device('cuda' if using_GPU else 'cpu')
     return device
 
-def _normalize_input_data(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
+def _normalize_input_data(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          use_cpu: bool=False):
@@ -88,30 +89,21 @@ def _normalize_input_data(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], L
 
     # Handle different options for X parameter. Accept multivariate data or covariance matrix
     if covmat_precomputed:
-        
-        if isinstance(X, (np.ndarray, torch.Tensor)):
-            assert X.shape[-2] == X.shape[-1], 'Covariance matrix should be square'
-            assert len(X.shape) in [2, 3], 'Covariance matrix should have dimensions (N, N) or (D, N, N)'
-            covmats = torch.as_tensor(X)
-            covmats = covmats.unsqueeze(0) if len(covmats.shape) == 2 else covmats
-        else:
-            assert all([len(x.shape) == 2 for x in X]), 'All covariance matrices should have dimensions (N, N)'
-            assert all([x.shape[0] == x.shape[1] == X[0].shape[0] for x in X]), 'All covariance matrices should have same dimensions (N, N)'
-            covmats = torch.stack([torch.as_tensor(x) for x in X])
+        covmats = torch.as_tensor(X)
+        covmats = covmats.unsqueeze(0) if len(covmats.shape) == 2 else covmats
+        assert X.shape[-2] == X.shape[-1], 'Covariance matrix should be square'
+        assert len(X.shape) == 3, 'Covariance matrix should have dimensions (N, N) or (D, N, N)'
     else:
         
-        if isinstance(X, (np.ndarray, torch.Tensor)):
+        try:
             X = _to_numpy(X)
             assert len(X.shape) in [2, 3], 'Covariance matrix should have dimensions (T, N) or (D, T, N)'
-            if len(X.shape) == 2:
-                X = [X]
-            else:
-                X = [X[i] for i in range(X.shape[0])]
-        else:
+            X = [X] if len(X.shape) == 2 else [X[i] for i in range(X.shape[0])]
+        except:
+            X = [_to_numpy(x) for x in X]
             assert all([len(x.shape) == 2 for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
             assert all([x.shape[1] == X[0].shape[1] for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
-            X = [_to_numpy(x) for x in X]
-        
+
         covmats = torch.stack([torch.from_numpy(gaussian_copula_covmat(x)) for x in X])
         T = [x.shape[0] for x in X]
 
