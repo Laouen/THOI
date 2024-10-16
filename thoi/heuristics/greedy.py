@@ -68,6 +68,32 @@ def greedy(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tenso
     
     return current_solution, torch.stack(best_scores).T
 
+def create_all_solutions(initial_solution: torch.Tensor, valid_solution: torch.Tensor) -> torch.Tensor:
+    """
+    Concatenates initial_solution with each valid_solution to create all_solutions.
+
+    Parameters:
+    - initial_solution (torch.Tensor): Tensor of shape (batch_size, O)
+    - valid_solution (torch.Tensor): Tensor of shape (batch_size, T)
+
+    Returns:
+    - all_solutions (torch.Tensor): Tensor of shape (batch_size, T, O + 1)
+    """
+    batch_size, O = initial_solution.shape
+    _, T = valid_solution.shape
+
+    # Step 1: Expand initial_solution to (batch_size, T, O)
+    # unsqueeze to add a new dimension at position 1 (for T)
+    initial_expanded = initial_solution.unsqueeze(1).expand(-1, T, -1)  # Shape: (batch_size, T, O)
+
+    # Step 2: Reshape valid_solution to (batch_size, T, 1) for concatenation
+    valid_reshaped = valid_solution.unsqueeze(2)  # Shape: (batch_size, T, 1)
+
+    # Step 3: Concatenate along the last dimension to get (batch_size, T, O + 1)
+    all_solutions = torch.cat([initial_expanded, valid_reshaped], dim=2)  # Shape: (batch_size, T, O + 1)
+
+    return all_solutions
+
 
 def _next_order_greedy(covmats: torch.Tensor,
                       T: Optional[List[int]],
@@ -95,7 +121,7 @@ def _next_order_greedy(covmats: torch.Tensor,
     # Get parameters attributes
     device = covmats.device
     N = covmats.shape[1]
-    batch_size = initial_solution.shape[0]
+    batch_size, order = initial_solution.shape
 
     # Initial valid candidates to iterate one by one
     # |batch_size| x |N-order|
@@ -104,9 +130,44 @@ def _next_order_greedy(covmats: torch.Tensor,
         all_elements[~torch.isin(all_elements, initial_solution[b])]
         for b in torch.arange(batch_size, device=device)
     ]).contiguous()
+    
+    # |batch_size| x |N-order| x |order+1|
+    all_solutions = create_all_solutions(initial_solution, valid_candidates)
+    
+    # |batch_size x N-order| x |order+1|
+    all_solutions = all_solutions.view(batch_size*(N-order), order+1)
+    
+    # |batch_size x N-order|
+    best_score = _evaluate_nplets(covmats, T, all_solutions, metric, use_cpu=use_cpu)
+    
+    # |batch_size| x |N-order|
+    best_score = best_score.view(batch_size, N-order)
+    
+    if not largest:
+        best_score = -best_score
+    
+    # get for each batch item the best score over the second dimention
+    
+    # |batch_size|
+    max_idxs = torch.argmax(best_score, dim=1)
+    best_candidates = valid_candidates[torch.arange(batch_size), max_idxs]
+    best_score = best_score[torch.arange(batch_size), max_idxs]
+    
+    # If minimizing, then return score to its original sign
+    if not largest:
+        best_score = -best_score
+
+    return best_candidates, best_score
+    
 
     # Current_solution constructed by adding first element of valid_candidate to input solution
     current_solution = torch.cat((initial_solution, valid_candidates[:, [0]]) , dim=1)
+    
+    # |batch_size| x |order| x |N-order|
+    all_solutions = initial_solution.unsqueeze(1).expand(-1, -1, valid_candidates.shape[1])
+    
+    # add valid candidates to the current solution at the end
+    all_solutions[:, :, -1] = valid_candidates
     
     # Start best solution first_candidate
     # |batch_size| x |order+1|
@@ -140,18 +201,10 @@ def _next_order_greedy(covmats: torch.Tensor,
         
         # update best solution based on accpetance criteria
         # |batch_size| x |order|
-        best_candidates = torch.where(
-            new_global_maxima,
-            current_candidates,
-            best_candidates
-        )
+        best_candidates[new_global_maxima] = current_candidates[new_global_maxima]
 
         # |batch_size|
-        best_score = torch.where(
-            new_global_maxima,
-            new_score,
-            best_score
-        )
+        best_score[new_global_maxima] = new_score[new_global_maxima]
     
     # If minimizing, then return score to its original sign
     if not largest:
