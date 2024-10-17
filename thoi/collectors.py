@@ -60,10 +60,12 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
         bool_array = np.zeros((batch_size, N), dtype=bool)
         rows = np.arange(batch_size).reshape(-1, 1)
         bool_array[rows, nplets_idxs] = True
-        bool_array = np.repeat(bool_array, D, axis=0)
     else:
         bool_array = nplets_idxs.bool().detach().cpu().numpy()
+        
 
+    # Repeat the boolean array to match the number of datasets and store in a DataFrame
+    bool_array = np.repeat(bool_array, D, axis=0)
     df_vars = pd.DataFrame(bool_array, columns=columns)
 
     # Concat both dataframes columns and store in disk
