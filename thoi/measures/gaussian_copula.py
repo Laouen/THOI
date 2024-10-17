@@ -1,6 +1,6 @@
 from typing import Optional, Callable, Union, List
 
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 from functools import partial
 
 import numpy as np
