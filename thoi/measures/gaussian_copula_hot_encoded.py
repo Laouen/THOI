@@ -89,22 +89,23 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
     Brief: Compute the total correlation (tc), dual total correlation (dtc), o-information (o) and s-information (s) for the given batch of covariance matrices.
     
     Parameters:
-    - covmats (torch.Tensor): The covariance matrices with shape (batch_size, N, N)
+    - covmats (torch.Tensor): The covariance matrices with shape (batch_size*D, N, N)
+    - nplets (torch.Tensor): The nplets to compute the measures with shape (batch_size, N)
     - orders (torch.Tensor): The order of each bached covmant (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
-    - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (batch_size, N, N-1)
-    - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size)
-    - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size)
-    - bcNmin1 (torch.Tensor): The bias corrector for the order-1 with shape (batch_size)
-    - marginal_entropies (Optional[torch.Tensor]): The marginal entropies for each variable with shape (batch_size, N). If None, it will be dynamically computed
+    - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (N, N-1)
+    - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size*D)
+    - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size*D)
+    - bcNmin1 (torch.Tensor): The bias corrector for the order-1 with shape (batch_size*D)
     '''
 
     batch_size, N = covmats.shape[:2]
+    D = batch_size // nplets.shape[0]
  
     # |batch_size|
     n_masked = N - orders
     
-    # |batch_size|
-    nplet_mask = nplets.repeat(batch_size // nplets.shape[0], 1)
+    # |batch_size| x |D| x |N|
+    nplet_mask = nplets.unsqueeze(1).repeat(1, D, 1).view(batch_size, N)
 
     # Compute the sub covariance matrices for each variable and the system without that variable exclusion
     # |batch_size| x |N|

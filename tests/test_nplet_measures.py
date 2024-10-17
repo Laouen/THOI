@@ -8,6 +8,7 @@ import os
 
 from itertools import combinations
 
+from thoi.collectors import batch_to_csv
 from thoi.measures.gaussian_copula import nplets_measures
 from thoi.measures.gaussian_copula_hot_encoded import nplets_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
@@ -23,92 +24,124 @@ class TestNpletsMeasures(unittest.TestCase):
         self.X = pd.read_csv(file_path, sep='\t', header=None).values
         self.covmat = gaussian_copula_covmat(self.X)
 
-        # get precomputed stats for each order and measure
-        self.df_stats = pd.read_csv(
-            os.path.join(current_dir, 'data','X_random__measures_stats.tsv'),
-            sep='\t', index_col=0
+        # get precomputed multi order measures
+        self.df_true = pd.read_csv(
+            os.path.join(current_dir, 'data','X_random__multi_order_measures.tsv'),
+            sep='\t'
         )
 
         self.cols_to_compare = ['tc', 'dtc', 'o', 's']
 
-    def _validate_with_stats(self, res, order, rtol, atol):
+    def _as_sorted_dataframe(self, df, nplets=None):
         
-        if isinstance(res, torch.Tensor):
-            res = res.squeeze(1) # remove the dataset dimension
-            df_desc = pd.DataFrame(res.detach().cpu().numpy(), columns=['tc', 'dtc', 'o', 's'])
-            df_desc = df_desc.describe()
-        else:
-            df_desc = res
+        if isinstance(df, torch.Tensor):
+            assert nplets is not None
+            df = batch_to_csv(nplets, df[:,:,0], df[:,:,1], df[:,:,2], df[:,:,3], 0, N=10)
         
-        df_desc = df_desc.sort_index()
+        df = df.reset_index(drop=True)
+        N = self.X.shape[1]
+        nplet_cols = [f'var_{i}' for i in range(N)]
+        df.loc[np.arange(len(df)), 'nplet'] = df[nplet_cols].apply(lambda x: ''.join(x.values.astype(int).astype(str)), axis=1)
         
-        df_stats = self.df_stats[self.df_stats['order'] == order][self.cols_to_compare]
-        df_stats = df_stats.sort_index()
+        df = df.sort_values(by=['order', 'nplet'])
+        df = df.reset_index(drop=True)
+        return df
 
-        pd.testing.assert_frame_equal(df_desc, df_stats, rtol=rtol, atol=atol)
+    def _compare_with_ground_truth(self, res, nplets, rtol=1e-5, atol=1e-8):
+        
+        df_test = self._as_sorted_dataframe(res, nplets)
+        
+        df_true = self.df_true[self.df_true['order'] == nplets.shape[1]]
+        df_true = self._as_sorted_dataframe(df_true)
 
-    def _validate_same_results_for_repeated_datasets(self, res, order, rtol, atol):
+        pd.testing.assert_frame_equal(df_test, df_true, rtol=rtol, atol=atol)
 
-        dfs = []
+    def _validate_same_results_for_repeated_datasets(self, res, nplets, rtol, atol):
+
+        # Every dataset should have the same results as the first one
         for idx in range(res.shape[1]):
-            df_desc = pd.DataFrame(res[:,idx,:].detach().cpu().numpy(), columns=['tc', 'dtc', 'o', 's'])
-            df_desc = df_desc.describe()
-            df_desc = df_desc.sort_index()
-            dfs.append(df_desc)
-
-        for df in dfs[1:]:
-            pd.testing.assert_frame_equal(df, dfs[0])
-            self._validate_with_stats(df, order, rtol, atol)
+            self._compare_with_ground_truth(res[:,idx,:].unsqueeze(1), nplets, rtol, atol)
 
     def test_nplets_measures_timeseries(self):
-        for order in [3, 4, 5, 18, 19, 20]:
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
             with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.X, nplets, use_cpu=True)
-                self._validate_with_stats(res, order, rtol=1e-16, atol=1e-7)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
     
     def test_nplets_measures_precomputed(self):
-        for order in [3, 4, 5, 18, 19, 20]:
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
             with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
-                self._validate_with_stats(res, order, rtol=1e-16, atol=1e-7)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+    
+    def test_multiple_times_same_datasets_timeseries(self):
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
+            with self.subTest(order=order):
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
+                res = nplets_measures([self.X, self.X], nplets, use_cpu=True)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
+    
+    def test_multiple_times_same_datasets_precomputed(self):
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
+            with self.subTest(order=order):
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
+                res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
 
     def test_nplets_measures_timeseries_hot_encoded(self):
         N = self.X.shape[1]
-        for order in [3, 4, 5, 18, 19, 20]:
+        full_nplet = range(N)
+        for order in range(3,11):
             with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
                 res = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, use_cpu=True)
-                self._validate_with_stats(res, order, rtol=1e-7, atol=1e-4)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-8, atol=1e-4)
 
-    def test_nplets_measures_timeseries_hot_encoded(self):
+    def test_nplets_measures_precomputed_hot_encoded(self):
         N = self.X.shape[1]
-        for order in [3, 4, 5, 18, 19, 20]:
+        full_nplet = range(N)
+        for order in range(3,11):
             with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
                 res = nplets_measures_hot_encoded(self.covmat, nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
-                self._validate_with_stats(res, order, rtol=1e-7, atol=1e-4)
-
-    def test_multiple_times_same_datasets_timeseries(self):
-        for order in [3, 4, 5, 18, 19, 20]:
-            with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
-                res = nplets_measures([self.X, self.X], nplets, use_cpu=True)
-                self._validate_same_results_for_repeated_datasets(res, order, rtol=1e-7, atol=1e-4)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-8, atol=1e-4)
     
-    def test_multiple_times_same_datasets_precomputed(self):
-        for order in [3, 4, 5, 18, 19, 20]:
+    def test_multiple_times_same_dataset_timeseries_hot_encoded(self):
+        N = self.X.shape[1]
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
             with self.subTest(order=order):
-                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
-                res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
-                self._validate_same_results_for_repeated_datasets(res, order, rtol=1e-7, atol=1e-4)
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
+                batch_size = nplets.shape[0]
+                nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
+                nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
+                res = nplets_measures_hot_encoded([self.X, self.X], nplets_hot_encoded, use_cpu=True)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-8, atol=1e-4)
+
+    def test_multiple_times_same_dataset_precomputed_hot_encoded(self):
+        N = self.X.shape[1]
+        full_nplet = range(self.X.shape[1])
+        for order in range(3,11):
+            with self.subTest(order=order):
+                nplets = torch.tensor(list(combinations(full_nplet, order)))
+                batch_size = nplets.shape[0]
+                nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
+                nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
+                res = nplets_measures_hot_encoded([self.covmat, self.covmat], nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-8, atol=1e-4)
+
 
 if __name__ == '__main__':
     unittest.main()
