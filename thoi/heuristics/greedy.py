@@ -68,18 +68,20 @@ def greedy(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tenso
     
     return current_solution, torch.stack(best_scores).T
 
-def get_valid_candidates(initial_solution: torch.Tensor, N: int, device: torch.device) -> torch.Tensor:
+
+def _get_valid_candidates(initial_solution: torch.Tensor, N: int, device: torch.device) -> torch.Tensor:
     """
     Efficiently generates valid candidates by excluding elements present in the initial solution.
 
     Parameters:
-    - initial_solution (torch.Tensor): Tensor of shape (batch_size, o) containing selected indices.
+    - initial_solution (torch.Tensor): Tensor of shape (batch_size, o) containing selected indices. Note: o < N and all elements must be unique.
     - N (int): Total number of possible elements.
     - device (torch.device): Device where tensors are located.
 
     Returns:
     - valid_candidates (torch.Tensor): Tensor of shape (batch_size, N - o) containing valid candidate indices.
     """
+    
     batch_size, o = initial_solution.shape
 
     # Create a tensor of all elements, expanded across the batch
@@ -114,26 +116,26 @@ def get_valid_candidates(initial_solution: torch.Tensor, N: int, device: torch.d
     return valid_candidates
 
 
-def create_all_solutions(initial_solution: torch.Tensor, valid_solution: torch.Tensor) -> torch.Tensor:
+def _create_all_solutions(initial_solution: torch.Tensor, valid_candidates: torch.Tensor) -> torch.Tensor:
     """
-    Concatenates initial_solution with each valid_solution to create all_solutions.
+    Concatenates initial_solution with each valid_candidate to create all_solutions.
 
     Parameters:
-    - initial_solution (torch.Tensor): Tensor of shape (batch_size, O)
-    - valid_solution (torch.Tensor): Tensor of shape (batch_size, T)
+    - initial_solution (torch.Tensor): Tensor of shape (batch_size, o) containing selected indices. Note: o < N and all elements must be unique.
+    - valid_candidate (torch.Tensor): Tensor of shape (batch_size, T)
 
     Returns:
     - all_solutions (torch.Tensor): Tensor of shape (batch_size, T, O + 1)
     """
-    T = valid_solution.shape[1]
+    T = valid_candidates.shape[1]
 
     # Expand initial_solution to a new dimension at position 1 (for T)
     # |batch_size| x |1| x |O|
     initial_expanded = initial_solution.unsqueeze(1).expand(-1, T, -1)
 
-    # Reshape valid_solution to (batch_size, T, 1) for concatenation
+    # Reshape valid_candidate to (batch_size, T, 1) for concatenation
     # |batch_size| x |T| x |1|
-    valid_reshaped = valid_solution.unsqueeze(2)
+    valid_reshaped = valid_candidates.unsqueeze(2)
 
     # Concatenate along the last dimension to get (batch_size, T, O + 1)
     # |batch_size| x |T| x |O + 1|
@@ -172,10 +174,10 @@ def _next_order_greedy(covmats: torch.Tensor,
 
     # Initial valid candidates to iterate one by one
     # |batch_size| x |N-order|
-    valid_candidates = get_valid_candidates(initial_solution, N, device)
+    valid_candidates = _get_valid_candidates(initial_solution, N, device)
     
     # |batch_size| x |N-order| x |order+1|
-    all_solutions = create_all_solutions(initial_solution, valid_candidates)
+    all_solutions = _create_all_solutions(initial_solution, valid_candidates)
     
     # |batch_size x N-order| x |order+1|
     all_solutions = all_solutions.view(batch_size*(N-order), order+1)
@@ -195,59 +197,6 @@ def _next_order_greedy(covmats: torch.Tensor,
     max_idxs = torch.argmax(best_score, dim=1)
     best_candidates = valid_candidates[torch.arange(batch_size), max_idxs]
     best_score = best_score[torch.arange(batch_size), max_idxs]
-    
-    # If minimizing, then return score to its original sign
-    if not largest:
-        best_score = -best_score
-
-    return best_candidates, best_score
-    
-
-    # Current_solution constructed by adding first element of valid_candidate to input solution
-    current_solution = torch.cat((initial_solution, valid_candidates[:, [0]]) , dim=1)
-    
-    # |batch_size| x |order| x |N-order|
-    all_solutions = initial_solution.unsqueeze(1).expand(-1, -1, valid_candidates.shape[1])
-    
-    # add valid candidates to the current solution at the end
-    all_solutions[:, :, -1] = valid_candidates
-    
-    # Start best solution first_candidate
-    # |batch_size| x |order+1|
-    best_candidates = valid_candidates[:, 0]
-    
-    # |batch_size|
-    best_score = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
-    
-    if not largest:
-        best_score = -best_score
-
-    # Iterate candidate from 1 since candidate 0 is already in the initial best solution 
-    for i_cand in trange(1,valid_candidates.shape[1], leave=False, desc=f'Candidates'):
-
-        # Update current solution to the next candidate inplace to avoid memory overhead
-        current_candidates = valid_candidates[:, i_cand]
-        current_solution[:, -1] = current_candidates
-
-        # Calculate score of new solutions
-        # |batch_size|
-        new_score = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
-
-        # if minimizing, then maximize the inverted score
-        if not largest:
-            new_score = -new_score
-
-        # Determine if we should accept the new solution
-        # new_score is bigger (more optimal) than best_score
-        # |batch_size|
-        new_global_maxima = new_score > best_score
-        
-        # update best solution based on accpetance criteria
-        # |batch_size| x |order|
-        best_candidates[new_global_maxima] = current_candidates[new_global_maxima]
-
-        # |batch_size|
-        best_score[new_global_maxima] = new_score[new_global_maxima]
     
     # If minimizing, then return score to its original sign
     if not largest:
