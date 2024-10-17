@@ -91,8 +91,8 @@ def _normalize_input_data(X: TensorLikeArray,
     if covmat_precomputed:
         covmats = torch.as_tensor(X)
         covmats = covmats.unsqueeze(0) if len(covmats.shape) == 2 else covmats
-        assert X.shape[-2] == X.shape[-1], 'Covariance matrix should be square'
-        assert len(X.shape) == 3, 'Covariance matrix should have dimensions (N, N) or (D, N, N)'
+        assert covmats.shape[-2] == covmats.shape[-1], 'Covariance matrix should be square'
+        assert len(covmats.shape) == 3, 'Covariance matrix should have dimensions (N, N) or (D, N, N)'
     else:
         
         try:

@@ -18,6 +18,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
         current_dir = os.path.dirname(__file__)
         file_path = os.path.join(current_dir, 'data','X_random.tsv')
         self.X = pd.read_csv(file_path, sep='\t', header=None).values
+        self.covmat = gaussian_copula_covmat(self.X)
 
         # get precomputed stats for each order and measure
         self.df_stats = pd.read_csv(
@@ -29,7 +30,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
     def test_multiorder_measures_timeseries(self):
 
-        df_res = multi_order_measures(self.X)
+        df_res = multi_order_measures(self.X, use_cpu=True)
 
         dfs = []
         for order in sorted(df_res['order'].unique()):
@@ -52,10 +53,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
     def test_multiorder_measures_precomputed_covmat(self):
 
-        T, N = self.X.shape
-        covmat = gaussian_copula_covmat(self.X)
-
-        df_res = multi_order_measures(covmat, covmat_precomputed=True, T=T)
+        df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
 
         dfs = []
         for order in sorted(df_res['order'].unique()):
@@ -77,7 +75,7 @@ class TestMultiOrderMeasures(unittest.TestCase):
                 self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=1e-6, equal_nan=True))
 
     def test_multiorder_measures_timeseries_hot_encoded(self):
-        df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000, use_cpu=True, num_workers=1)
+        df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000, use_cpu=True)
 
         dfs = []
         for order in sorted(df_res['order'].unique()):
@@ -99,11 +97,8 @@ class TestMultiOrderMeasures(unittest.TestCase):
                 self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=1e-4, equal_nan=True))
 
     def test_multiorder_measures_precomputed_hot_encoded(self):
-        
-        T, N = self.X.shape
-        covmat = gaussian_copula_covmat(self.X)
-        
-        df_res = multi_order_measures_hot_encoded(covmat, batch_size=200000, use_cpu=True)
+
+        df_res = multi_order_measures_hot_encoded(self.covmat, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
 
         dfs = []
         for order in sorted(df_res['order'].unique()):

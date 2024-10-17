@@ -202,10 +202,11 @@ def nplets_measures(X: Union[TensorLikeArray],
 
 @torch.no_grad()
 def multi_order_measures(X: TensorLikeArray,
-                         covmat_precomputed: bool=False,
-                         T: Optional[Union[int, List[int]]]=None,
                          min_order: int=3,
                          max_order: Optional[int]=None,
+                         *,
+                         covmat_precomputed: bool=False,
+                         T: Optional[Union[int, List[int]]]=None,
                          batch_size: int = 1000000,
                          use_cpu: bool = False,
                          use_cpu_dataset: bool = True,

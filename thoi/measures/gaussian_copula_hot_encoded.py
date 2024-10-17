@@ -214,11 +214,12 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
 
 @torch.no_grad()
 def multi_order_measures_hot_encoded(X: TensorLikeArray,
-                                     covmat_precomputed: bool=False,
-                                     T: Optional[int]=None,
                                      min_order: int=3,
                                      max_order: Optional[int]=None,
-                                     batch_size: int = 1000000,
+                                     *,
+                                     covmat_precomputed: bool=False,
+                                     T: Optional[int]=None,
+                                     batch_size: int = 100000,
                                      use_cpu: bool = False,
                                      use_cpu_dataset: bool = True,
                                      batch_aggregation: Optional[Callable[[any],any]] = None,
@@ -261,7 +262,6 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
 
     batch_size = batch_size // D
-    print('Effective batch size:', batch_size*D, 'for', D, 'datasets with batch size', batch_size, 'each')
 
     # Create marginal indexes once to be reused
     allmin1 = _all_min_1_ids(N, device=device)
