@@ -3,14 +3,17 @@
 import unittest
 import numpy as np
 import pandas as pd
+import torch
 import os
 
-from thoi.measures.gaussian_copula import multi_order_measures
+from itertools import combinations
+
+from thoi.measures.gaussian_copula import multi_order_measures, nplets_measures
 from thoi.measures.gaussian_copula_hot_encoded import multi_order_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
 
 # TODO: make this test for all combinations of use_cpu in [True, False] use_cpu_dataset in [True, False] and dataset_device in ['cpu', 'gpu']
-class TestMultiOrderMeasures(unittest.TestCase):
+class TestNpletsMeasures(unittest.TestCase):
 
     # make the constructor
     def setUp(self):
@@ -28,26 +31,18 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
         self.cols_to_compare = ['tc', 'dtc', 'o', 's']
 
-    def _validate_with_stats(self, df_res, atol):
+    def _validate_with_stats(self, res, order):
         
-        dfs = []
-        for order in sorted(df_res['order'].unique()):
-            df_desc = df_res[df_res['order'] == order].describe()
-            df_desc['order'] = order
-            dfs.append(df_desc)
+        res = res.squeeze(1) # remove the dataset dimension
 
-        df_desc = pd.concat(dfs)
+        df_desc = pd.DataFrame(res.detach().cpu().numpy(), columns=['tc', 'dtc', 'o', 's'])
+        df_desc = df_desc.describe()
+        df_desc = df_desc.sort_index()
+        
+        df_stats = self.df_stats[self.df_stats['order'] == order][self.cols_to_compare]
+        df_stats = df_stats.sort_index()
 
-        for order in df_res['order'].unique():
-            with self.subTest(order=order):
-                df_desc_order = df_desc[df_desc['order'] == order][self.cols_to_compare]
-                df_stats_order = self.df_stats[self.df_stats['order'] == order][self.cols_to_compare]
-
-                # sort by index
-                df_desc_order = df_desc_order.sort_index()
-                df_stats_order = df_stats_order.sort_index()
-
-                self.assertTrue(np.allclose(df_desc_order.values, df_stats_order.values, atol=atol, equal_nan=True))
+        pd.testing.assert_frame_equal(df_desc, df_stats)
 
     def _validate_same_results_for_repeated_datasets(self, df_res, atol):
     
@@ -63,13 +58,20 @@ class TestMultiOrderMeasures(unittest.TestCase):
             pd.testing.assert_frame_equal(df, dfs[0])
             self._validate_with_stats(df, atol=atol)
 
-    def test_multiorder_measures_timeseries(self):
-        df_res = multi_order_measures(self.X, use_cpu=True)
-        self._validate_with_stats(df_res, atol=1e-6)
+    def test_nplets_measures_timeseries(self):
+        for order in [3, 4, 5, 18, 19, 20]:
+            with self.subTest(order=order):
+                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                res = nplets_measures(self.X, nplets, use_cpu=True)
+                self._validate_with_stats(res, order)
+    
+    def test_nplets_measures_precomputed(self):
+        for order in [3, 4, 5, 18, 19, 20]:
+            with self.subTest(order=order):
+                nplets = torch.tensor(list(combinations(range(self.X.shape[1]), order)))
+                res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                self._validate_with_stats(res, order)
 
-    def test_multiorder_measures_precomputed_covmat(self):
-        df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
-        self._validate_with_stats(df_res, atol=1e-6)
 
     def test_multiorder_measures_timeseries_hot_encoded(self):
         df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000, use_cpu=True)

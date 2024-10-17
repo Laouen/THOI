@@ -137,6 +137,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
 @torch.no_grad()
 def nplets_measures(X: Union[TensorLikeArray],
                     nplets: Optional[TensorLikeArray] = None,
+                    *,
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
                     use_cpu: bool = False):

@@ -189,6 +189,7 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
 @torch.no_grad()
 def nplets_measures_hot_encoded(X: TensorLikeArray,
                                 nplets: Optional[TensorLikeArray] = None,
+                                *,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
                                 use_cpu: bool = False):
