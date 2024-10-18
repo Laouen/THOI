@@ -21,20 +21,21 @@ from thoi.measures.utils import _all_min_1_ids, \
 def _generate_nplets_marginal_entropies(marginal_entropies: torch.Tensor, nplets: torch.Tensor):
     
     D, N = marginal_entropies.shape
-    batch_size, O = nplets.shape
+    batch_size, order = nplets.shape
     
     # Expand entropies
     # |batch_size| x |D| x |N|
     entropies_expanded = marginal_entropies.unsqueeze(0).expand(batch_size, D, N)
 
     # Expand nplets and repeat them across the D dimensions
-    # |batch_size| x |D| x |O|
-    nplets_expanded = nplets.unsqueeze(1).expand(batch_size, D, O)
+    # |batch_size| x |D| x |order|
+    nplets_expanded = nplets.unsqueeze(1).expand(batch_size, D, order)
 
     # Gather the entropies based on nplets indices
-    # |batch_size| x |D| x |O|
+    # |batch_size| x |D| x |order|
     nplets_marginal_entropies = torch.gather(entropies_expanded, dim=2, index=nplets_expanded)
 
+     # |batch_size| x |D| x |order|
     return nplets_marginal_entropies
     
 
@@ -60,7 +61,8 @@ def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     # |batch_size| x |D| x |order| x |order|
     indices_col = nplets_expanded.unsqueeze(-2).expand(-1, -1, order, -1)
     nplets_covmat = torch.gather(gathered_rows, 3, indices_col)
-    
+
+    # |batch_size| x |D| x |order| x |order|
     return nplets_covmat
 
 
@@ -170,6 +172,7 @@ def nplets_measures(X: Union[TensorLikeArray],
     batch_size, order = nplets.shape
 
     # Create marginal indexes
+    # |N| x |N-1|
     allmin1 = _all_min_1_ids(order, device=device)
 
     # Create bias corrector values
@@ -262,7 +265,11 @@ def multi_order_measures(X: TensorLikeArray,
     for order in tqdm(range(min_order, max_order+1), leave=False, desc='Order', disable=(min_order==max_order)):
 
         # Calculate constant values valid for all n-plets of the current order
+        # |N| x |N-1|
         allmin1 = _all_min_1_ids(order, device=device)
+        
+        # Create the bias corrector for the current order
+        # |batch_size x D|, |batch_size x D|, |batch_size x D|
         bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
         # Generate dataset iterable
@@ -277,13 +284,15 @@ def multi_order_measures(X: TensorLikeArray,
 
         # calculate measurments for each batch
         for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
+            # Batch_size can vary in the last batch, then effective batch size is the current batch size
             curr_batch_size = nplets.shape[0]
 
             # Send nplets to the device in case it is not there
+            # |curr_batch_size| x |order|
             nplets = nplets.to(device)
 
             # Create the covariance matrices for each nplet in the batch
-            # |curr_batch_size| x |D| x |N| x |N|
+            # |curr_batch_size| x |D| x |order| x |order|
             nplets_covmats = _generate_nplets_covmants(covmats, nplets)
             
             # Create the marginal entropies sampling from the marginal_entropies tensor

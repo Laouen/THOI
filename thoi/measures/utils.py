@@ -6,10 +6,12 @@ from thoi.measures.constants import LOGTWOPIE, TWOPIE
 
 
 def _all_min_1_ids(N: torch.device, device: torch.device=torch.device('cpu')):
-    base_tensor = torch.arange(N, device=device).unsqueeze(0).repeat(N, 1)  # Shape: (N, N)
-    mask = base_tensor != torch.arange(N, device=device).unsqueeze(1)  # Shape: (N, N)
-    result = base_tensor[mask].view(N, N - 1)  # Shape: (N, N-1)
-    return result
+    # |N| x |N|
+    base_tensor = torch.arange(N, device=device).unsqueeze(0).repeat(N, 1)
+    # |N| x |N|
+    mask = base_tensor != torch.arange(N, device=device).unsqueeze(1)
+    # |N| x |N-1|
+    return base_tensor[mask].view(N, N - 1)
 
 
 def _gaussian_entropy_bias_correction(N,T):

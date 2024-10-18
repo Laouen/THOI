@@ -143,7 +143,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
 def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
                                          T: Optional[int],
                                          N: int, D: int,
-                                         nplets: Optional[Union[np.ndarray,torch.Tensor]],
+                                         nplets: Union[np.ndarray,torch.Tensor],
                                          allmin1: Optional[torch.Tensor] = None):
     batch_size = nplets.shape[0]
     device = covmats.device
@@ -170,7 +170,7 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
     # Batch process all nplets at once
     measures = _get_tc_dtc_from_batched_covmat(nplets_covmat,
                                                nplets,
-                                               orders.repeat(D),
+                                               orders.repeat_interleave(D), # |batch_size x D|
                                                allmin1,
                                                bc1,
                                                bcN,
@@ -266,6 +266,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
     batch_size = batch_size // D
 
     # Create marginal indexes once to be reused
+    # |N| x |N-1|
     allmin1 = _all_min_1_ids(N, device=device)
 
     dataset = HotEncodedMultiOrderDataset(N, min_order, max_order, device=_get_device(use_cpu_dataset))
@@ -280,7 +281,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
     batched_data = []
     for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
         
-        # |batch_size| x |N| x |N|
+        # |batch_size| x |N|
         nplets = nplets.to(device, non_blocking=True)
         
         # Batch process all nplets at once to obtain (tc, dtc, o, s)

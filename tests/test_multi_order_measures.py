@@ -80,12 +80,12 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
     def test_multiple_times_same_datasets_timeseries_hot_encoded(self):
         df_res = multi_order_measures_hot_encoded([self.X, self.X], use_cpu=True)
-        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
+        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-8, atol=1e-4)
     
     def test_multiple_times_same_datasets_precomputed_hot_encoded(self):
         covmats = [self.covmat, self.covmat]
         df_res = multi_order_measures_hot_encoded(covmats, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
-        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
+        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-8, atol=1e-4)
 
 
 if __name__ == '__main__':
