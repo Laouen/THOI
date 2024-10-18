@@ -23,6 +23,8 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
                  indexing_method: str='indexes', # indexes or hot_encoded
                  output_path: Optional[str]=None):
     
+    # nplets have shape |batch_size| x |D|
+    
     assert columns is not None or N is not None, 'either columns or N must be defined'
 
     if N is None:
@@ -40,6 +42,7 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
         nplets_dtc = nplets_dtc[to_keep]
         nplets_o = nplets_o[to_keep]
         nplets_s = nplets_s[to_keep]
+        # TODO: Check if this is correct since to_keep has shape |batch_size| x |D| and nplets_idcx has shape |batch_size|
         nplets_idxs = nplets_idxs[to_keep.to(nplets_idxs.device)]
     
     bs, D = nplets_dtc.shape if len(nplets_dtc.shape) == 2 else (nplets_dtc.shape[0], 1)
