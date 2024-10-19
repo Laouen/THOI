@@ -73,8 +73,11 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
     no_progress_count = 0
     pbar = trange(max_iterations, leave=True)
     for _ in pbar:
+        
+        # Get function name if metric is a function
+        metric_name = metric.__name__ if callable(metric) else metric
 
-        pbar.set_description(f'mean({metric.upper()}) = {(1 if largest else -1) * best_energy.mean()} - ES: {no_progress_count}')
+        pbar.set_description(f'mean({metric_name}) = {(1 if largest else -1) * best_energy.mean()} - ES: {no_progress_count}')
         
         
         # |batch_size|
