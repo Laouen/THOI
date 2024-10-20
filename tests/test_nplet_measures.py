@@ -13,7 +13,7 @@ from thoi.measures.gaussian_copula import nplets_measures
 from thoi.measures.gaussian_copula_hot_encoded import nplets_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
 
-# TODO: make this test for all combinations of use_cpu in [True, False] use_cpu_dataset in [True, False] and dataset_device in ['cpu', 'gpu']
+# TODO: make this test for all combinations of devices in [cpu, gpu] and different input types
 class TestNpletsMeasures(unittest.TestCase):
 
     # make the constructor
@@ -67,7 +67,7 @@ class TestNpletsMeasures(unittest.TestCase):
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
-                res = nplets_measures(self.X, nplets, use_cpu=True)
+                res = nplets_measures(self.X, nplets)
                 self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
     
     def test_nplets_measures_precomputed(self):
@@ -75,7 +75,7 @@ class TestNpletsMeasures(unittest.TestCase):
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
-                res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0])
                 self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
     
     def test_multiple_times_same_datasets_timeseries(self):
@@ -83,7 +83,7 @@ class TestNpletsMeasures(unittest.TestCase):
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
-                res = nplets_measures([self.X, self.X], nplets, use_cpu=True)
+                res = nplets_measures([self.X, self.X], nplets)
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
     
     def test_multiple_times_same_datasets_precomputed(self):
@@ -91,7 +91,7 @@ class TestNpletsMeasures(unittest.TestCase):
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
-                res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0])
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
 
     def test_nplets_measures_timeseries_hot_encoded(self):
@@ -103,7 +103,7 @@ class TestNpletsMeasures(unittest.TestCase):
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
-                res = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, use_cpu=True)
+                res = nplets_measures_hot_encoded(self.X, nplets_hot_encoded)
                 self._compare_with_ground_truth(res, nplets, rtol=1e-8, atol=1e-4)
 
     def test_nplets_measures_precomputed_hot_encoded(self):
@@ -115,7 +115,7 @@ class TestNpletsMeasures(unittest.TestCase):
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
-                res = nplets_measures_hot_encoded(self.covmat, nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                res = nplets_measures_hot_encoded(self.covmat, nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0])
                 self._compare_with_ground_truth(res, nplets, rtol=1e-8, atol=1e-4)
     
     def test_multiple_times_same_dataset_timeseries_hot_encoded(self):
@@ -127,7 +127,7 @@ class TestNpletsMeasures(unittest.TestCase):
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
-                res = nplets_measures_hot_encoded([self.X, self.X], nplets_hot_encoded, use_cpu=True)
+                res = nplets_measures_hot_encoded([self.X, self.X], nplets_hot_encoded)
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-8, atol=1e-4)
 
     def test_multiple_times_same_dataset_precomputed_hot_encoded(self):
@@ -139,7 +139,7 @@ class TestNpletsMeasures(unittest.TestCase):
                 batch_size = nplets.shape[0]
                 nplets_hot_encoded = torch.zeros((batch_size, N), dtype=torch.int)
                 nplets_hot_encoded[torch.arange(0,batch_size, dtype=int).view(-1,1), nplets] = 1
-                res = nplets_measures_hot_encoded([self.covmat, self.covmat], nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+                res = nplets_measures_hot_encoded([self.covmat, self.covmat], nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0])
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-8, atol=1e-4)
 
 

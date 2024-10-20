@@ -12,12 +12,13 @@ def _evaluate_nplets(covmats: torch.Tensor,
                      T: Optional[List[int]],
                      batched_nplets: torch.Tensor,
                      metric: Union[str, Callable],
-                     use_cpu:bool):
+                     device: torch.device):
     """
-        covmats (torch.Tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
-        T (Optional[List[int]]): The number of samples for each multivariate series or None
-        batched_nplets (torch.Tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
-        metric (str): The metric to evaluate. One of tc, dtc, o, s or Callable
+        - covmats (torch.Tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
+        - T (Optional[List[int]]): The number of samples for each multivariate series or None
+        - batched_nplets (torch.Tensor): The nplets to calculate the inverse of the oinformation with shape (batch_size, order)
+        - metric (str): The metric to evaluate. One of tc, dtc, o, s or Callable
+        - device (torch.device): The device to use
     """
 
     if len(covmats.shape) == 2:
@@ -30,17 +31,17 @@ def _evaluate_nplets(covmats: torch.Tensor,
                                        nplets=batched_nplets,
                                        T=T,
                                        covmat_precomputed=True,
-                                       use_cpu=use_cpu)
+                                       device=device)
     
     # |batch_size|
-    return metric_func(batched_measures).to(covmats.device)
+    return metric_func(batched_measures).to(device)
 
 
 def _evaluate_nplet_hot_encoded(covmats: torch.Tensor,
-                                T:int,
+                                T: int,
                                 batched_nplets: torch.Tensor,
-                                metric:str,
-                                use_cpu:bool):
+                                metric: str,
+                                device: torch.device):
 
     """
         covmats (torch.Tensor): The covariance matrix or matrixes with shape (N, N) or (D, N, N)
@@ -59,7 +60,7 @@ def _evaluate_nplet_hot_encoded(covmats: torch.Tensor,
                                                    nplets=batched_nplets,
                                                    T=T,
                                                    covmat_precomputed=True,
-                                                   use_cpu=use_cpu)
+                                                   device=device)
 
     # |batch_size|
-    return metric_func(batched_measures).to(covmats.device)
+    return metric_func(batched_measures).to(device)

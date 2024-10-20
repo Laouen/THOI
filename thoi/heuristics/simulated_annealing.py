@@ -2,6 +2,7 @@ from typing import Optional, List, Union, Callable
 import numpy as np
 from tqdm import trange
 import torch
+import logging
 
 from thoi.heuristics.scoring import _evaluate_nplets
 from thoi.heuristics.commons import _get_valid_candidates
@@ -25,15 +26,21 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
                         T: Optional[Union[int, List[int]]]=None,
                         initial_solution: Optional[torch.Tensor] = None,
                         repeat: int = 10,
-                        use_cpu: bool = False,
+                        device: torch.device = torch.device('cpu'),
                         max_iterations: int = 1000,
                         early_stop: int = 100,
                         initial_temp: float = 100.0,
                         cooling_rate: float = 0.99,
                         metric: Union[str,Callable]='o', # tc, dtc, o, s
-                        largest: bool = False):
+                        largest: bool = False,
+                        verbose: int = logging.INFO):
     
-    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
+    logging.basicConfig(
+        level=verbose,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
 
     # Compute current solution
     # |batch_size| x |order|
@@ -43,7 +50,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplets(covmats, T, current_solution, metric, device=device)
 
     if not largest:
         current_energy = -current_energy
@@ -88,7 +95,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplets(covmats, T, current_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplets(covmats, T, current_solution, metric, device=device)
 
         if not largest:
             new_energy = -new_energy
@@ -134,7 +141,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
             no_progress_count += 1
         
         if no_progress_count >= early_stop:
-            print('Early stop reached')
+            logging.info('Early stop reached')
             break
 
     # If minimizing, then return score to its real value

@@ -9,7 +9,7 @@ from thoi.measures.gaussian_copula import multi_order_measures
 from thoi.measures.gaussian_copula_hot_encoded import multi_order_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
 
-# TODO: make this test for all combinations of use_cpu in [True, False] use_cpu_dataset in [True, False] and dataset_device in ['cpu', 'gpu']
+# TODO: make this test for all combinations of device in [cpu, cuda] and different input types
 class TestMultiOrderMeasures(unittest.TestCase):
 
     # make the constructor
@@ -54,37 +54,37 @@ class TestMultiOrderMeasures(unittest.TestCase):
             self._compare_with_ground_truth(df_dataset, rtol, atol)
 
     def test_multiorder_measures_timeseries(self):
-        df_res = multi_order_measures(self.X, use_cpu=True)
+        df_res = multi_order_measures(self.X)
         self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
         
     def test_multiorder_measures_precomputed_covmat(self):
-        df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+        df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0])
         self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
 
     def test_multiorder_measures_timeseries_hot_encoded(self):
-        df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000, use_cpu=True)
+        df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000)
         self._compare_with_ground_truth(df_res, rtol=1e-8, atol=1e-4)
 
     def test_multiorder_measures_precomputed_hot_encoded(self):
-        df_res = multi_order_measures_hot_encoded(self.covmat, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+        df_res = multi_order_measures_hot_encoded(self.covmat, covmat_precomputed=True, T=self.X.shape[0])
         self._compare_with_ground_truth(df_res, rtol=1e-8, atol=1e-4)
 
     def test_multiple_times_same_datasets_timeseries(self):
-        df_res = multi_order_measures([self.X, self.X], use_cpu=True)
+        df_res = multi_order_measures([self.X, self.X])
         self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
     
     def test_multiple_times_same_datasets_precomputed(self):
         covmats = [self.covmat, self.covmat]
-        df_res = multi_order_measures(covmats, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+        df_res = multi_order_measures(covmats, covmat_precomputed=True, T=self.X.shape[0])
         self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
 
     def test_multiple_times_same_datasets_timeseries_hot_encoded(self):
-        df_res = multi_order_measures_hot_encoded([self.X, self.X], use_cpu=True)
+        df_res = multi_order_measures_hot_encoded([self.X, self.X])
         self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-8, atol=1e-4)
     
     def test_multiple_times_same_datasets_precomputed_hot_encoded(self):
         covmats = [self.covmat, self.covmat]
-        df_res = multi_order_measures_hot_encoded(covmats, covmat_precomputed=True, T=self.X.shape[0], use_cpu=True)
+        df_res = multi_order_measures_hot_encoded(covmats, covmat_precomputed=True, T=self.X.shape[0])
         self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-8, atol=1e-4)
 
 

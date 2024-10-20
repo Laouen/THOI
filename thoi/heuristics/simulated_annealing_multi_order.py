@@ -2,6 +2,7 @@ from typing import List, Union, Optional, Callable
 import numpy as np
 from tqdm import trange
 import torch
+import logging
 
 from thoi.commons import _normalize_input_data
 from thoi.heuristics.scoring import _evaluate_nplet_hot_encoded
@@ -33,16 +34,22 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
                                     T: Optional[Union[int, List[int]]]=None,
                                     initial_solution: Optional[torch.Tensor] = None,
                                     repeat: int = 10,
-                                    use_cpu: bool = False,
+                                    device: torch.device = torch.device('cpu'),
                                     max_iterations: int = 1000,
                                     early_stop: int = 100,
                                     initial_temp: float = 100.0,
                                     cooling_rate: float = 0.99,
                                     step_size: int = 1,
                                     metric: Union[str,Callable]='o', # tc, dtc, o, s
-                                    largest: bool = False):
+                                    largest: bool = False,
+                                    verbose: int = logging.INFO):
+    
+    logging.basicConfig(
+        level=verbose,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
-    covmats, D, N, T, device = _normalize_input_data(X, covmat_precomputed, T, use_cpu)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
     
     # Compute current solution
     # |batch_size| x |order|
@@ -52,7 +59,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
         current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, use_cpu=use_cpu)
+    current_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, device=device)
 
     if not largest:
         current_energy = -current_energy
@@ -73,7 +80,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
     no_progress_count = 0
     pbar = trange(max_iterations, leave=True)
     for _ in pbar:
-        
+
         # Get function name if metric is a function
         metric_name = metric.__name__ if callable(metric) else metric
 
@@ -90,7 +97,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, use_cpu=use_cpu)
+        new_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, device=device)
 
         if not largest:
             new_energy = -new_energy
@@ -135,7 +142,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
             no_progress_count += 1
         
         if no_progress_count >= early_stop:
-            print('Early stop reached')
+            logging.info('Early stop reached')
             break
 
     # If minimizing, then return score to its real value

@@ -5,7 +5,7 @@ import torch
 from thoi.measures.constants import LOGTWOPIE, TWOPIE
 
 
-def _all_min_1_ids(N: torch.device, device: torch.device=torch.device('cpu')):
+def _all_min_1_ids(N: int, device: torch.device=torch.device('cpu')):
     # |N| x |N|
     base_tensor = torch.arange(N, device=device).unsqueeze(0).repeat(N, 1)
     # |N| x |N|

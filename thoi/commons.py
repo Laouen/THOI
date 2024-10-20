@@ -73,7 +73,7 @@ def _get_device(use_cpu:bool=False):
 def _normalize_input_data(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
-                         use_cpu: bool=False):
+                         device: torch.device=torch.device('cpu')):
     '''
     brief: Normalize the input data to be a list of covariance matrices with shape (D, N, N) where D is the lenght of the list and N is the number of variables in the system.
 
@@ -81,11 +81,8 @@ def _normalize_input_data(X: TensorLikeArray,
     - X: A list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
     - covmat_precomputed: A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (optional): A list of integers indicating the number of samples for each multivariate series.
-    - use_cpu: A boolean flag to indicate if the computation should be done on the CPU.
+    - device: The device to use for the computation. Default is 'cpu'.
     '''
-
-    # Get device to use
-    device = _get_device(use_cpu)
 
     # Handle different options for X parameter. Accept multivariate data or covariance matrix
     if covmat_precomputed:
@@ -116,4 +113,4 @@ def _normalize_input_data(X: TensorLikeArray,
     # Send covmat to device  
     covmats = covmats.to(device).contiguous()
 
-    return covmats, D, N, T, device
+    return covmats, D, N, T
