@@ -192,6 +192,8 @@ def nplets_measures(X: Union[TensorLikeArray],
         logging.warning('Using hot encoding to compute multi-order measures as nplets have different orders')
         nplets = _indices_to_hot_encoded(nplets, N)
         return nplets_measures_hot_encoded(covmats, nplets, covmat_precomputed=True, T=T)
+    elif nplets is None:
+        nplets = torch.arange(N, device=device).unsqueeze(0)
     
     # If nplets are not tensors, convert to tensor
     nplets = torch.as_tensor(nplets).to(device).contiguous()
