@@ -109,7 +109,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         # |batch_size|
         temp_probas = torch.rand(repeat, device=device) < torch.exp(delta_energy / temp)
         improves = delta_energy > 0
-        accept_new_solution = torch.logical_and(improves, temp_probas)
+        accept_new_solution = torch.logical_or(improves, temp_probas)
         
         # Restore original values for rejected candidates
         # |batch_size| x |order|

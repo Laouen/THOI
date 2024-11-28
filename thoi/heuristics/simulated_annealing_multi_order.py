@@ -111,7 +111,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
         # |batch_size|
         temp_probas = torch.rand(repeat, device=device) < torch.exp(delta_energy / temp)
         improves = delta_energy > 0
-        accept_new_solution = torch.logical_and(improves, temp_probas)
+        accept_new_solution = torch.logical_or(improves, temp_probas)
 
         # valid solutions have at least three elements with 1. Non valid solution are not accepted
         valid_solutions = current_solution.sum(dim=1) >= 3
