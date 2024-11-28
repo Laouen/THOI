@@ -165,20 +165,130 @@ def nplets_measures(X: Union[TensorLikeArray],
                     device: torch.device = torch.device('cpu'),
                     verbose: int = logging.INFO):
     
-    '''
-    Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
+    """
+    Compute higher-order measures (TC, DTC, O, S) for specified n-plets in the given data matrices X.
+
+    The computed measures are:
+        - **Total Correlation (TC)**
+        - **Dual Total Correlation (DTC)**
+        - **O-information (O)**
+        - **S-information (S)**
+
+    Parameters
+    ----------
+    X : TensorLikeArray
+        Input data, which can be one of the following:
+        - A single torch.Tensor or np.ndarray with shape (T, N).
+        - A sequence (e.g., list) of torch.Tensor or np.ndarray, each with shape (T, N), representing multiple datasets.
+        - A sequence of sequences, where each inner sequence is an array-like object of shape (T, N).
+        If `covmat_precomputed` is True, X should be:
+        - A single torch.Tensor or np.ndarray covariance matrix with shape (N, N).
+        - A sequence of covariance matrices, each with shape (N, N).
+
+    nplets : TensorLikeArray, optional
+        The n-plets to calculate the measures, with shape `(n_nplets, order)`. If `None`, all possible n-plets of the given order are considered.
+
+    covmat_precomputed : bool, optional
+        If True, X is treated as covariance matrices instead of raw data. Default is False.
+
+    T : int or list of int, optional
+        Number of samples used to compute bias correction. This parameter is used only if `covmat_precomputed` is True.
+        If X is a sequence of covariance matrices, T should be a list of sample sizes corresponding to each matrix.
+        If T is None and `covmat_precomputed` is True, bias correction is not applied. Default is None.
+
+    device : torch.device, optional
+        Device to use for computation. Default is torch.device('cpu').
+
+    verbose : int, optional
+        Logging verbosity level. Default is `logging.INFO`.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor containing the computed measures for each n-plet with shape `(n_nplets, D, 4)`
+
+    Where
+    -----
+    D : int
+        Number of datasets. If `X` is a single dataset, `D = 1`.
+
+    N : int
+        Number of variables (features) in each dataset.
+
+    T : int
+        Number of samples in each dataset (if applicable).
+
+    order : int
+        The size of the n-plets being analyzed.
+
+    n_nplets : int
+        Number of n-plets processed.
+
+    Examples
+    --------
+    **Compute measures for all possible 3-plets in a single dataset:**
+
+    ```python
+    import torch
+    import numpy as np
+
+    # Sample data matrix with 100 samples and 5 variables
+    X = np.random.randn(100, 5)
+
+    # Compute measures for all 3-plets
+    measures = nplets_measures(X, nplets=None, covmat_precomputed=False, T=100)
+    ```
+
+    **Compute measures for specific n-plets in multiple datasets:**
+
+    ```python
+    import torch
+    import numpy as np
+
+    # Sample data matrices for 2 datasets, each with 100 samples and 5 variables
+    X1 = np.random.randn(100, 5)
+    X2 = np.random.randn(100, 5)
+    X = [X1, X2]
+
+    # Define specific n-plets to analyze
+    nplets = torch.tensor([[0, 1, 2], [1, 2, 3]])
+
+    # Compute measures for the specified n-plets
+    measures = nplets_measures(X, nplets=nplets, covmat_precomputed=False, T=[100, 100])
+    ```
+
+    **Compute measures with precomputed covariance matrices:**
+
+    ```python
+    import torch
+    import numpy as np
+
+    # Precompute covariance matrices for 2 datasets
+    covmat1 = np.cov(np.random.randn(100, 5), rowvar=False)
+    covmat2 = np.cov(np.random.randn(100, 5), rowvar=False)
+    X = [covmat1, covmat2]
+
+    # Number of samples for each covariance matrix
+    T = [100, 100]
+
+    # Define specific n-plets to analyze
+    nplets = torch.tensor([[0, 1], [2, 3]])
+
+    # Compute measures using precomputed covariance matrices
+    measures = nplets_measures(X, nplets=nplets, covmat_precomputed=True, T=T)
+    ```
+
+    **Notes**
+    -----
+    - If `nplets` is `None`, the function considers all possible n-plets of the specified order within the datasets.
+    - Ensure that the length of `T` matches the number of datasets when `covmat_precomputed` is `True` and `X` is a sequence of covariance matrices.
+    - The function is optimized for batch processing using PyTorch tensors, facilitating efficient computations on large datasets.
     
-    Parameters:
-    - X (Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]]): The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
-    - nplets (Optional[Union[np.ndarray,torch.Tensor]]): The nplets to calculate the measures with shape (batch_size, order)
-    - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
-    - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
-    - device (torch.device): The device to use for the computation. Default is 'cpu'.
-    - hot_encoded (bool): A boolean flag to indicate if to convert nplets to hot encoded and use the hot encoded version or if to divide by orders and process as indexes.
-    
-    Returns:
-    - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
-    '''
+    References
+    ----------
+    .. [1] Rosas, Fernando E., et al. "Quantifying high-order interdependencies via multivariate extensions of the mutual information." Physical Review E 100.3 (2019): 032305.
+
+    """
     
     logging.basicConfig(
         level=verbose,
@@ -248,27 +358,115 @@ def multi_order_measures(X: TensorLikeArray,
                          batch_aggregation: Optional[Callable[[any],any]] = None,
                          batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
     """
-    Compute multi-order Gaussian Copula (GC) measurements for the given data matrix X.
+    Compute multi-order measures (TC, DTC, O, S) for the given data matrix X.
+
     The measurements computed are:
-        * Total Correlation (TC)
-        * Dual Total Correlation (DTC)
-        * O-information (O)
-        * S-information (S)
+        - Total Correlation (TC)
+        - Dual Total Correlation (DTC)
+        - O-information (O)
+        - S-information (S)
 
-    Parameters:
-        - X (np.ndarray or torch.Tensor): (T samples x N variables) or (D datas x T samples x N variables) matrix.
-        - min_order (int): Minimum order to compute (default: 3).
-        - max_order (Optional[int]): Maximum order to compute (default: None, will use N).
-        - covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
-        - T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
-        - batch_size (int): Batch size for DataLoader (default: 1000000).
-        - device (torch.device): Device to use for the computation (default: 'cpu').
-        - num_workers (int): Number of workers for DataLoader (default: 0).
-        - batch_aggregation (Optional[Callable[[any],any]]): Function to aggregate the batched data (default: pd.concat).
-        - batch_data_collector (Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]]): Function to collect the batched data (default: batch_to_csv).
+    Parameters
+    ----------
+    X : TensorLikeArray
+        Input data, which can be one of the following:
+        - A single torch.Tensor or np.ndarray with shape (T, N).
+        - A sequence (e.g., list) of torch.Tensor or np.ndarray, each with shape (T, N), representing multiple datasets.
+        - A sequence of sequences, where each inner sequence is an array-like object of shape (T, N).
+        If `covmat_precomputed` is True, X should be:
+        - A single torch.Tensor or np.ndarray covariance matrix with shape (N, N).
+        - A sequence of covariance matrices, each with shape (N, N).
 
-    Returns:
-        pd.DataFrame: DataFrame containing computed metrics.
+    min_order : int, optional
+        Minimum order to compute. Default is 3. Note: 3 <= min_order <= max_order <= N.
+    max_order : int, optional
+        Maximum order to compute. If None, uses N (number of variables). Default is None. Note: min_order <= max_order <= N.
+    covmat_precomputed : bool, optional
+        If True, X is treated as covariance matrices instead of raw data. Default is False.
+    T : int or list of int, optional
+        Number of samples used to compute bias correction. This parameter is used only if `covmat_precomputed` is True.
+        If X is a sequence of covariance matrices, T should be a list of sample sizes corresponding to each matrix.
+        If T is None and `covmat_precomputed` is True, bias correction is not applied. Default is None.
+    batch_size : int, optional
+        Batch size for DataLoader. Default is 1,000,000.
+    device : torch.device, optional
+        Device to use for computation. Default is torch.device('cpu').
+    num_workers : int, optional
+        Number of workers for DataLoader. Default is 0.
+    batch_aggregation : callable, optional
+        Function to aggregate the collected batch data into the final result.
+        It should accept a list of outputs from `batch_data_collector` and return the final aggregated result.
+        The return type of this function determines the return type of `multi_order_measures`.
+        By default, it uses `concat_and_sort_csv`, which concatenates CSV data and sorts it, returning a pandas DataFrame. 
+        For more information see :ref:`collectors__concat_and_sort_csv`
+    batch_data_collector : callable, optional
+        Function to process and collect data from each batch.
+        It should accept the following parameters:
+            - nplets: torch.Tensor of n-plet indices, shape (batch_size, order)
+            - nplets_tc: torch.Tensor of total correlation values, shape (batch_size, D)
+            - nplets_dtc: torch.Tensor of dual total correlation values, shape (batch_size, D)
+            - nplets_o: torch.Tensor of O-information values, shape (batch_size, D)
+            - nplets_s: torch.Tensor of S-information values, shape (batch_size, D)
+            - batch_number: int, the current batch number
+        The output of `batch_data_collector` must be compatible with the input expected by `batch_aggregation`.
+        By default, it uses `batch_to_csv`, which collects data into CSV. For more information see :ref:`collectors__batch_to_csv`
+
+    Returns
+    -------
+    Any
+        The aggregated result of the computed measures. The exact type depends on the `batch_aggregation` function used.
+        By default, it returns a pandas DataFrame containing the computed metrics (DTC, TC, O, S), the n-plets indexes, 
+        the order and the dataset information.
+    
+    Where
+    -----
+    D : int
+        Number of datasets. If X is a single dataset, D = 1.
+    N : int
+        Number of variables (features) in each dataset.
+    T : int
+        Number of samples in each dataset (if applicable).
+    order : int
+        The size of the n-plets being analyzed, ranging from `min_order` to `max_order`.
+    batch_size : int
+        Number of n-plets processed in each batch.
+
+    Notes
+    -----
+    - The default `batch_data_collector` and `batch_aggregation` functions are designed to work together.
+      If you provide custom functions, ensure that the output of `batch_data_collector` is compatible with the input of `batch_aggregation`.
+    - Ensure that the length of `T` matches the number of datasets when `covmat_precomputed` is `True` and `X` is a sequence of covariance matrices.
+    - The function computes measures for all combinations of variables of orders ranging from `min_order` to `max_order`.
+    - The function is optimized for batch processing using PyTorch tensors, facilitating efficient computations on large datasets.
+
+    Examples
+    --------
+    Using default batch data collector and aggregation:
+
+    >>> result = multi_order_measures(X, min_order=3, max_order=5)
+
+    Using custom batch data collector and aggregation:
+
+    >>> def custom_batch_data_collector(nplets, tc, dtc, o, s, batch_number):
+    ...     # Custom processing
+    ...     return custom_data
+    ...
+    >>> def custom_batch_aggregation(batch_data_list):
+    ...     # Custom aggregation
+    ...     return final_result
+    ...
+    >>> result = multi_order_measures(
+    ...     X,
+    ...     min_order=3,
+    ...     max_order=5,
+    ...     batch_data_collector=custom_batch_data_collector,
+    ...     batch_aggregation=custom_batch_aggregation
+    ... )
+
+    References
+    ----------
+    .. [1] Rosas, Fernando E., et al. "Quantifying high-order interdependencies via multivariate extensions of the mutual information." Physical Review E 100.3 (2019): 032305.
+
     """
 
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)

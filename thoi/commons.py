@@ -78,7 +78,7 @@ def _normalize_input_data(X: TensorLikeArray,
     brief: Normalize the input data to be a list of covariance matrices with shape (D, N, N) where D is the lenght of the list and N is the number of variables in the system.
 
     Parameters:
-    - X: A list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+    - X: A list or a single 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
     - covmat_precomputed: A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (optional): A list of integers indicating the number of samples for each multivariate series.
     - device: The device to use for the computation. Default is 'cpu'.
