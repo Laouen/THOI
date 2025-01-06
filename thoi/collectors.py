@@ -376,9 +376,12 @@ def batch_to_tensor(nplets_idxs: torch.Tensor,
                             metric,
                             largest)
 
+    metric_func = partial(_get_string_metric, metric=metric) if isinstance(metric, str) else metric
+    
     # If not top_k or len(nplets_measuresa) > top_k  return the original values
-    # |k x D x 4|, |k x N|
-    return (nplets_measures, nplets_idxs, None)
+    # |k x D x 4|, |k x N|, |k|
+    values = metric_func(nplets_measures).to(nplets_measures.device)
+    return (nplets_measures, nplets_idxs, values)
 
 
 def concat_batched_tensors(batched_tensors: List[Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]],
