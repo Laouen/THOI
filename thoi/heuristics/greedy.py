@@ -1,7 +1,6 @@
 from typing import Union, Callable, List, Optional
 from tqdm import trange
 
-import numpy as np
 import torch
 from functools import partial
 
@@ -20,8 +19,8 @@ def greedy(X: TensorLikeArray,
            covmat_precomputed: bool=False,
            T: Optional[Union[int, List[int]]]=None,
            repeat: int=10,
-           device: torch.device=torch.device('cpu'),
            batch_size: int=1000000,
+           device: torch.device=torch.device('cpu'),
            metric: Union[str,Callable]='o',
            largest: bool=False):
 
@@ -74,6 +73,7 @@ def greedy(X: TensorLikeArray,
         best_candidate, best_score = _next_order_greedy(covmats, T, current_solution,
                                                        metric=metric,
                                                        largest=largest,
+                                                       batch_size=batch_size,
                                                        device=device)
         best_scores.append(best_score)
 
@@ -115,6 +115,7 @@ def _next_order_greedy(covmats: torch.Tensor,
                       initial_solution: torch.Tensor,
                       metric: Union[str,Callable],
                       largest: bool,
+                      batch_size: int=1000000,
                       device: torch.device=torch.device('cpu')):
     
     '''
@@ -126,6 +127,7 @@ def _next_order_greedy(covmats: torch.Tensor,
     - initial_solution (torch.Tensor): The initial solution with shape (batch_size, order)
     - metric (Union[str,Callable]): The metric to evaluate. One of tc, dtc, o, s or a callable function
     - largest (bool): A flag to indicate if the metric is to be maximized or minimized
+    - batch_size (int): The batch size to use for the computation. Default is 1000000.
     - device (torch.device): The device to use for the computation. Default is 'cpu'
     
     Returns:
@@ -135,36 +137,51 @@ def _next_order_greedy(covmats: torch.Tensor,
 
     # Get parameters attributes
     N = covmats.shape[1]
-    batch_size, order = initial_solution.shape
+    total_size, order = initial_solution.shape
 
     # Initial valid candidates to iterate one by one
-    # |batch_size| x |N-order|
+    # |total_size| x |N-order|
     valid_candidates = _get_valid_candidates(initial_solution, N, device)
-    
-    # |batch_size| x |N-order| x |order+1|
-    all_solutions = _create_all_solutions(initial_solution, valid_candidates)
-    
-    # |batch_size x N-order| x |order+1|
-    all_solutions = all_solutions.view(batch_size*(N-order), order+1)
-    
-    # |batch_size x N-order|
-    best_score = _evaluate_nplets(covmats, T, all_solutions, metric, device=device)
-    
-    # |batch_size| x |N-order|
-    best_score = best_score.view(batch_size, N-order)
-    
-    if not largest:
-        best_score = -best_score
-    
-    # get for each batch item the best score over the second dimention
-    
-    # |batch_size|
-    max_idxs = torch.argmax(best_score, dim=1)
-    best_candidates = valid_candidates[torch.arange(batch_size), max_idxs]
-    best_score = best_score[torch.arange(batch_size), max_idxs]
-    
-    # If minimizing, then return score to its original sign
-    if not largest:
-        best_score = -best_score
 
-    return best_candidates, best_score
+    best_candidates = []
+    best_scores = []
+
+    for start in range(0, total_size, batch_size):
+        end = min(start + batch_size, total_size)
+        batch_initial_solution = initial_solution[start:end]
+        batch_valid_candidates = valid_candidates[start:end]
+
+        # |batch_size| x |N-order| x |order+1|
+        all_solutions = _create_all_solutions(batch_initial_solution, batch_valid_candidates)
+        
+        # |batch_size x N-order| x |order+1|
+        all_solutions = all_solutions.view(-1, order+1)
+        
+        # |batch_size x N-order|
+        batch_best_score = _evaluate_nplets(covmats, T,
+                                            all_solutions,
+                                            metric,
+                                            batch_size=batch_size,
+                                            device=device)
+        
+        # |batch_size| x |N-order|
+        batch_best_score = batch_best_score.view(end - start, N - order)
+        
+        if not largest:
+            batch_best_score = -batch_best_score
+        
+        # get for each batch item the best score over the second dimension
+        
+        # |batch_size|
+        max_idxs = torch.argmax(batch_best_score, dim=1)
+        batch_best_candidates = batch_valid_candidates[torch.arange(end - start), max_idxs]
+        batch_best_score = batch_best_score[torch.arange(end - start), max_idxs]
+        
+        # If minimizing, then return score to its original sign
+        if not largest:
+            batch_best_score = -batch_best_score
+
+        best_candidates.append(batch_best_candidates)
+        best_scores.append(batch_best_score)
+
+    return torch.cat(best_candidates), torch.cat(best_scores)

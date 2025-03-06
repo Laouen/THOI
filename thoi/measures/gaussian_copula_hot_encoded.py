@@ -193,6 +193,7 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
                                 *,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
+                                batch_size: int = 100000,
                                 device: torch.device = torch.device('cpu')):
     '''
     Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
@@ -203,6 +204,7 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
     - covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
     - device (torch.device): The device to use for the computation. Default is 'cpu'.
+    - batch_size (int): Batch size for processing n-plets. Default is 100,000.
     
     Returns:
     - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
@@ -219,13 +221,23 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
 
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
-    
-    # Batch process all nplets at once to obtain (tc, dtc, o, s)
-    # |batch_size| x |D|, |batch_size| x |D|, |batch_size x D|, |batch_size x D|
-    measures = _compute_nplets_measures_hot_encoded(covmats, T, N, D, nplets)
-    
-    # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
-    return torch.stack(measures, dim=-1)
+    batch_size = min(batch_size, len(nplets))
+
+    # Create DataLoader for nplets
+    dataloader = DataLoader(nplets, batch_size=batch_size, shuffle=False)
+
+    results = []
+    for nplet_batch in tqdm(dataloader, desc='Processing n-plets', leave=False):
+
+        # Batch process all nplets at once to obtain (tc, dtc, o, s)
+        # |nplet_batch.shape[0]| x |D|, |nplet_batch.shape[0]| x |D|, |nplet_batch.shape[0] x D|, |nplet_batch.shape[0] x D|
+        measures = _compute_nplets_measures_hot_encoded(covmats, T, N, D, nplet_batch)
+
+        # Collect results
+        results.append(torch.stack(measures, dim=-1))
+
+    # Concatenate all results
+    return torch.cat(results, dim=0)
 
 @torch.no_grad()
 def multi_order_measures_hot_encoded(X: TensorLikeArray,

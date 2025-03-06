@@ -163,7 +163,8 @@ def nplets_measures(X: Union[TensorLikeArray],
                     covmat_precomputed: bool = False,
                     T: Optional[Union[int, List[int]]] = None,
                     device: torch.device = torch.device('cpu'),
-                    verbose: int = logging.INFO):
+                    verbose: int = logging.INFO,
+                    batch_size: int = 1000000):
     
     """
     Compute higher-order measures (TC, DTC, O, S) for specified n-plets in the given data matrices X.
@@ -201,6 +202,9 @@ def nplets_measures(X: Union[TensorLikeArray],
 
     verbose : int, optional
         Logging verbosity level. Default is `logging.INFO`.
+
+    batch_size : int, optional
+        Batch size for processing n-plets. Default is 1,000,000.
 
     Returns
     -------
@@ -310,7 +314,8 @@ def nplets_measures(X: Union[TensorLikeArray],
         
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
-    batch_size, order = nplets.shape
+    batch_size = min(batch_size, len(nplets))
+    order = nplets.shape[1]
 
     # Create marginal indexes
     # |N| x |N-1|
@@ -320,30 +325,40 @@ def nplets_measures(X: Union[TensorLikeArray],
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
     bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
 
-    # Create the covariance matrices for each nplet in the batch
-    # |batch_size| x |D| x |N| x |N|
-    nplets_covmats = _generate_nplets_covmants(covmats, nplets)
+    # Create DataLoader for nplets
+    dataloader = DataLoader(nplets, batch_size=batch_size, shuffle=False)
 
-    # Pack covmat in a single batch
-    # |batch_size x D| x |order| x |order|
-    nplets_covmats = nplets_covmats.view(batch_size*D, order, order)
+    results = []
+    for nplet_batch in tqdm(dataloader, desc='Processing n-plets', leave=False):
+        curr_batch_size = nplet_batch.shape[0]
 
-    # Batch process all nplets at once
-    measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
-                                               allmin1,
-                                               bc1,
-                                               bcN,
-                                               bcNmin1)
+        # Create the covariance matrices for each nplet in the batch
+        # |curr_batch_size| x |D| x |order| x |order|
+        nplets_covmats = _generate_nplets_covmants(covmats, nplet_batch)
+        
+        # Pack covmats in a single batch
+        # |curr_batch_size x D| x |order| x |order|
+        nplets_covmats = nplets_covmats.view(curr_batch_size * D, order, order)
 
-    # Unpack results
-    # |batch_size x D|, |batch_size x D|, |batch_size x D|, |batch_size x D|
-    nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
+        # Batch process all nplets at once
+        measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
+                                                   allmin1,
+                                                   bc1[:curr_batch_size * D],
+                                                   bcN[:curr_batch_size * D],
+                                                   bcNmin1[:curr_batch_size * D])
 
-    # |batch_size| x |D| x |4 = (tc, dtc, o, s)|
-    return torch.stack([nplets_tc.view(batch_size, D),
-                        nplets_dtc.view(batch_size, D),
-                        nplets_o.view(batch_size, D),
-                        nplets_s.view(batch_size, D)], dim=-1)
+        # Unpack results
+        # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
+        nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
+
+        # Collect results
+        results.append(torch.stack([nplets_tc.view(curr_batch_size, D),
+                                    nplets_dtc.view(curr_batch_size, D),
+                                    nplets_o.view(curr_batch_size, D),
+                                    nplets_s.view(curr_batch_size, D)], dim=-1))
+
+    # Concatenate all results
+    return torch.cat(results, dim=0)
 
 @torch.no_grad()
 def multi_order_measures(X: TensorLikeArray,
