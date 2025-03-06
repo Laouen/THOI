@@ -19,8 +19,8 @@ def greedy(X: TensorLikeArray,
            covmat_precomputed: bool=False,
            T: Optional[Union[int, List[int]]]=None,
            repeat: int=10,
-           device: torch.device=torch.device('cpu'),
            batch_size: int=1000000,
+           device: torch.device=torch.device('cpu'),
            metric: Union[str,Callable]='o',
            largest: bool=False):
 
