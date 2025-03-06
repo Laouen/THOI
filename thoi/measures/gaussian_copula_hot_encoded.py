@@ -193,8 +193,8 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
                                 *,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
-                                device: torch.device = torch.device('cpu'),
-                                batch_size: int = 100000):
+                                batch_size: int = 100000,
+                                device: torch.device = torch.device('cpu')):
     '''
     Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
     

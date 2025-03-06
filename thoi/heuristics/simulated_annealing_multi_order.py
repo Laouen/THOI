@@ -34,6 +34,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
                                     T: Optional[Union[int, List[int]]]=None,
                                     initial_solution: Optional[torch.Tensor] = None,
                                     repeat: int = 10,
+                                    batch_size: int = 1000000,
                                     device: torch.device = torch.device('cpu'),
                                     max_iterations: int = 1000,
                                     early_stop: int = 100,
@@ -59,7 +60,11 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
         current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, device=device)
+    current_energy = _evaluate_nplet_hot_encoded(covmats, T,
+                                                 current_solution,
+                                                 metric,
+                                                 batch_size=batch_size,
+                                                 device=device)
 
     if not largest:
         current_energy = -current_energy
@@ -97,7 +102,11 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplet_hot_encoded(covmats, T, current_solution, metric, device=device)
+        new_energy = _evaluate_nplet_hot_encoded(covmats, T,
+                                                 current_solution,
+                                                 metric,
+                                                 batch_size=batch_size,
+                                                 device=device)
 
         if not largest:
             new_energy = -new_energy
