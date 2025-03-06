@@ -50,7 +50,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         current_solution = initial_solution.to(device).contiguous()
 
     # |batch_size|
-    current_energy = _evaluate_nplets(covmats, T, current_solution, metric, device=device)
+    current_energy = _evaluate_nplets(covmats, T, current_solution, metric, batch_size=1000000, device=device)
 
     if not largest:
         current_energy = -current_energy
@@ -95,7 +95,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
 
         # Calculate energy of new solution
         # |batch_size|
-        new_energy = _evaluate_nplets(covmats, T, current_solution, metric, device=device)
+        new_energy = _evaluate_nplets(covmats, T, current_solution, metric, batch_size=1000000, device=device)
 
         if not largest:
             new_energy = -new_energy
