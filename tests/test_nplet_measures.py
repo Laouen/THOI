@@ -93,6 +93,28 @@ class TestNpletsMeasures(unittest.TestCase):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0])
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
+    
+    def test_batch_size_does_not_change_result(self):
+        full_nplet = range(self.X.shape[1])
+        
+        nplets = torch.tensor([list(c) for i, c in enumerate(combinations(full_nplet, 3)) if i < 100000])
+        
+        # test for different batch sizes
+        res = nplets_measures(self.X, nplets)
+        res2 = nplets_measures(self.X, nplets, batch_size=10)
+        res3 = nplets_measures(self.X, nplets, batch_size=100)
+        res4 = nplets_measures(self.X, nplets, batch_size=1000)
+        res5 = nplets_measures(self.X, nplets, batch_size=10000)
+        res6 = nplets_measures(self.X, nplets, batch_size=100000)
+        res7 = nplets_measures(self.X, nplets, batch_size=1000000) # this should do a single batch
+        
+        # check that the results are the same
+        self.assertTrue(torch.allclose(res, res2, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res3, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res4, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res5, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res6, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res7, rtol=1e-16, atol=1e-12))
 
     def test_nplets_measures_timeseries_hot_encoded(self):
         N = self.X.shape[1]
@@ -142,6 +164,30 @@ class TestNpletsMeasures(unittest.TestCase):
                 res = nplets_measures_hot_encoded([self.covmat, self.covmat], nplets_hot_encoded, covmat_precomputed=True, T=self.X.shape[0])
                 self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-8, atol=1e-4)
 
+    def test_batch_size_does_not_change_result_hot_encoded(self):
+        full_nplet = range(self.X.shape[1])
+        
+        nplets = torch.tensor([list(c) for i, c in enumerate(combinations(full_nplet, 3)) if i < 100000])
+        nplets_hot_encoded = torch.zeros((nplets.shape[0], self.X.shape[1]), dtype=torch.int)
+        nplets_hot_encoded[torch.arange(0,nplets.shape[0], dtype=int).view(-1,1), nplets] = 1
+        
+        # test for different batch sizes
+        res = nplets_measures_hot_encoded(self.X, nplets_hot_encoded)
+        res2 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=10)
+        res3 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=100)
+        res4 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=1000)
+        res5 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=10000)
+        res6 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=100000)
+        res7 = nplets_measures_hot_encoded(self.X, nplets_hot_encoded, batch_size=1000000) # this should do a single batch
+        
+        # check that the results are the same
+        self.assertTrue(torch.allclose(res, res2, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res3, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res4, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res5, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res6, rtol=1e-16, atol=1e-12))
+        self.assertTrue(torch.allclose(res, res7, rtol=1e-16, atol=1e-12))
 
+        
 if __name__ == '__main__':
     unittest.main()
