@@ -103,7 +103,7 @@ If you use the `thoi` library in a scientific project, please cite it using one 
 ```bibtex
 @misc{thoi,
   author       = {Laouen Belloli and Rubén Herzog},
-  title        = {THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing},
+  title        = {THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing},
   year         = {2024},
   url          = {https://pypi.org/project/thoi/}
 }
