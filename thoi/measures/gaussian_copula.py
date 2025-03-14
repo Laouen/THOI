@@ -502,7 +502,7 @@ def multi_order_measures(X: TensorLikeArray,
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
 
     # Ensure that final batch_size is smaller than the original batch_size 
-    batch_size = batch_size // D
+    batch_size = max(batch_size // D, 1)
 
     # To compute using pytorch, we need to compute each order separately
     batched_data = []

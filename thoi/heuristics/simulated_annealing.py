@@ -44,13 +44,13 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
 
     # Compute current solution
-    # |batch_size| x |order|
+    # |repeat| x |order|
     if initial_solution is None:
         current_solution = random_sampler(N, order, repeat, device)
     else:
         current_solution = initial_solution.to(device).contiguous()
 
-    # |batch_size|
+    # |repeat|
     current_energy = _evaluate_nplets(covmats, T,
                                       current_solution,
                                       metric,
@@ -61,21 +61,21 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         current_energy = -current_energy
 
     # Initial valid candidates
-    # |batch_size| x |N-order|
+    # |repeat| x |N-order|
     valid_candidates = _get_valid_candidates(current_solution, N, device)
 
     # Set initial temperature
     temp = initial_temp
 
     # Best solution found
-    # |batch_size| x |order|
+    # |repeat| x |order|
     best_solution = current_solution.clone()
-    # |batch_size|
+    # |repeat|
     best_energy = current_energy.clone()
     
     # Repeat tensor for indexing the current_solution
     # |repeat| x |1|
-    i_repeat = torch.arange(repeat)
+    i_repeat = torch.arange(repeat, device=device)
 
     no_progress_count = 0
     pbar = trange(max_iterations, leave=False)
@@ -88,7 +88,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         
         # Generate new solution by modifying the current solution.
         # Generate the random indexes to change.
-        # |batch_size| x |order|
+        # |repeat| x |order|
         i_sol = torch.randint(0, current_solution.shape[1], (repeat,), device=device)
         i_cand = torch.randint(0, valid_candidates.shape[1], (repeat,), device=device)
 
@@ -99,7 +99,7 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
         current_solution[i_repeat, i_sol] = new_candidates
 
         # Calculate energy of new solution
-        # |batch_size|
+        # |repeat|
         new_energy = _evaluate_nplets(covmats, T,
                                       current_solution,
                                       metric,
@@ -111,33 +111,33 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
 
         # Calculate change in energy
         # delca_energy > 0 means new_energy is bigger (more optimal) than current_energy
-        # |batch_size|
+        # |repeat|
         delta_energy = new_energy - current_energy
 
         # Determine if we should accept the new solution
-        # |batch_size|
+        # |repeat|
         temp_probas = torch.rand(repeat, device=device) < torch.exp(delta_energy / temp)
         improves = delta_energy > 0
         accept_new_solution = torch.logical_or(improves, temp_probas)
         
         # Restore original values for rejected candidates
-        # |batch_size| x |order|
+        # |repeat| x |order|
         current_solution[i_repeat[~accept_new_solution], i_sol[~accept_new_solution]] = current_candidates[~accept_new_solution]
         
         # Update valid_candidate for the accepted answers as they are not longer valid candidates
-        # |batch_size| x |N-order|
+        # |repeat| x |N-order|
         valid_candidates[i_repeat[accept_new_solution], i_cand[accept_new_solution]] = current_candidates[accept_new_solution]
 
         # Update current energy for the accepted solutions
-        # |batch_size|
+        # |repeat|
         current_energy[accept_new_solution] = new_energy[accept_new_solution]
 
         new_global_maxima = (new_energy > best_energy)
 
-        # |batch_size| x |order|
+        # |repeat| x |order|
         best_solution[new_global_maxima] = current_solution[new_global_maxima]
 
-        # |batch_size|
+        # |repeat|
         best_energy[new_global_maxima] = new_energy[new_global_maxima]
 
         # Cool down

@@ -20,6 +20,7 @@ def greedy(X: TensorLikeArray,
            T: Optional[Union[int, List[int]]]=None,
            repeat: int=10,
            batch_size: int=1000000,
+           repeat_batch_size: int=1000000,
            device: torch.device=torch.device('cpu'),
            metric: Union[str,Callable]='o',
            largest: bool=False):
@@ -50,7 +51,7 @@ def greedy(X: TensorLikeArray,
     batch_data_collector = partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest)
     batch_aggregation = partial(concat_batched_tensors, top_k=repeat, metric=None, largest=largest)
 
-    # |repeat| x |initial_order|
+    # |repeat| x |initial_order|, |repeat|
     _, current_solution, current_scores = multi_order_measures(covmats,
                                                                covmat_precomputed=True,
                                                                T=T,
@@ -60,7 +61,7 @@ def greedy(X: TensorLikeArray,
                                                                device=device,
                                                                batch_data_collector=batch_data_collector,
                                                                batch_aggregation=batch_aggregation)
-    
+
     # send current solution to the device
     current_solution = current_solution.to(device).contiguous()
 
@@ -70,15 +71,21 @@ def greedy(X: TensorLikeArray,
     # Iterate over the remaining orders to get the best solution for each order
     best_scores = [current_scores]
     for _ in trange(initial_order, order, leave=False, desc='Order'):
+        
+        # |repeat|, |repeat|
         best_candidate, best_score = _next_order_greedy(covmats, T, current_solution,
                                                        metric=metric,
                                                        largest=largest,
                                                        batch_size=batch_size,
+                                                       repeat_batch_size=repeat_batch_size,
                                                        device=device)
+        # |order - initial_order| x |repeat|
         best_scores.append(best_score)
-
+        
+        # |repeat| x |order|
         current_solution = torch.cat((current_solution, best_candidate.unsqueeze(1)) , dim=1)
     
+    # |repeat| x |order|, |repeat| x |order - initial_order|
     return current_solution, torch.stack(best_scores).T
 
 
@@ -116,6 +123,7 @@ def _next_order_greedy(covmats: torch.Tensor,
                       metric: Union[str,Callable],
                       largest: bool,
                       batch_size: int=1000000,
+                      repeat_batch_size: int=1000000,
                       device: torch.device=torch.device('cpu')):
     
     '''
@@ -146,25 +154,25 @@ def _next_order_greedy(covmats: torch.Tensor,
     best_candidates = []
     best_scores = []
 
-    for start in range(0, total_size, batch_size):
-        end = min(start + batch_size, total_size)
+    for start in trange(0, total_size, repeat_batch_size, desc='Batch repeat', leave=False):
+        end = min(start + repeat_batch_size, total_size)
         batch_initial_solution = initial_solution[start:end]
         batch_valid_candidates = valid_candidates[start:end]
 
-        # |batch_size| x |N-order| x |order+1|
+        # |repeat_batch_size| x |N-order| x |order+1|
         all_solutions = _create_all_solutions(batch_initial_solution, batch_valid_candidates)
         
-        # |batch_size x N-order| x |order+1|
+        # |repeat_batch_size x N-order| x |order+1|
         all_solutions = all_solutions.view(-1, order+1)
         
-        # |batch_size x N-order|
+        # |repeat_batch_size x N-order|
         batch_best_score = _evaluate_nplets(covmats, T,
                                             all_solutions,
                                             metric,
                                             batch_size=batch_size,
                                             device=device)
         
-        # |batch_size| x |N-order|
+        # |repeat_batch_size| x |N-order|
         batch_best_score = batch_best_score.view(end - start, N - order)
         
         if not largest:
@@ -172,7 +180,7 @@ def _next_order_greedy(covmats: torch.Tensor,
         
         # get for each batch item the best score over the second dimension
         
-        # |batch_size|
+        # |repeat_batch_size|
         max_idxs = torch.argmax(batch_best_score, dim=1)
         batch_best_candidates = batch_valid_candidates[torch.arange(end - start), max_idxs]
         batch_best_score = batch_best_score[torch.arange(end - start), max_idxs]
