@@ -84,7 +84,7 @@ best_nplets, best_scores = greedy(X, 3, 5, repeat=10)
 best_nplets, best_scores = simulated_annealing(X, 5, repeat=10)
 ```
 
-For detailed usage and examples, please refer to the [documentation]([https://github.com/Laouen/THOI](https://laouen.github.io/THOI/)).
+For detailed usage and examples, please refer to the [documentation](https://github.com/Laouen/THOI](https://laouen.github.io/THOI/).
 
 ## Contributing
 
