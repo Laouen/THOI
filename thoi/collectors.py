@@ -23,6 +23,11 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
                  indexing_method: str='indexes', # indexes or hot_encoded
                  output_path: Optional[str]=None) -> Optional[pd.DataFrame]:
     """
+    .. _collectors__batch_to_csv:
+    
+    Collectors Batch to CSV
+    ========================
+
     Convert batch results to a pandas DataFrame and optionally save to CSV.
 
     This function processes the measures computed for n-plets in a batch and converts them into a pandas DataFrame.
@@ -171,6 +176,11 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
 
 def concat_and_sort_csv(batched_dataframes) -> pd.DataFrame:
     """
+    .. _collectors__concat_and_sort_csv:
+    
+    Collectors Concat and sort CSV
+    ==============================
+
     Concatenate a list of DataFrames and sort them by the 'dataset' column.
 
     Parameters

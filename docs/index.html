@@ -1,0 +1,1139 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to THOI’s documentation! &mdash; THOI 0.2.34 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b85e2031"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            THOI
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Welcome to THOI’s documentation!</a><ul>
+<li><a class="reference internal" href="#readme">README</a><ul>
+<li><a class="reference internal" href="#thoi-torch-higher-order-interactions">THOI: Torch - Higher Order Interactions</a><ul>
+<li><a class="reference internal" href="#description">Description</a></li>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#installing-thoi-with-your-prefered-versions-of-pytorch">Installing THOI with your prefered Versions of PyTorch</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#contributing">Contributing</a></li>
+<li><a class="reference internal" href="#license">License</a></li>
+<li><a class="reference internal" href="#citation">Citation</a><ul>
+<li><a class="reference internal" href="#bibtex">BibTeX</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#authors">Authors</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#license">License</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#module-thoi.measures.gaussian_copula">Functions</a><ul>
+<li><a class="reference internal" href="#thoi.measures.gaussian_copula.multi_order_measures"><code class="docutils literal notranslate"><span class="pre">multi_order_measures()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.measures.gaussian_copula.nplets_measures"><code class="docutils literal notranslate"><span class="pre">nplets_measures()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.measures.gaussian_copula_hot_encoded.multi_order_measures_hot_encoded"><code class="docutils literal notranslate"><span class="pre">multi_order_measures_hot_encoded()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.measures.gaussian_copula_hot_encoded.nplets_measures_hot_encoded"><code class="docutils literal notranslate"><span class="pre">nplets_measures_hot_encoded()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.commons.gaussian_copula"><code class="docutils literal notranslate"><span class="pre">gaussian_copula()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.commons.gaussian_copula_covmat"><code class="docutils literal notranslate"><span class="pre">gaussian_copula_covmat()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.collectors.batch_to_csv"><code class="docutils literal notranslate"><span class="pre">batch_to_csv()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.collectors.batch_to_tensor"><code class="docutils literal notranslate"><span class="pre">batch_to_tensor()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.collectors.concat_and_sort_csv"><code class="docutils literal notranslate"><span class="pre">concat_and_sort_csv()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.collectors.concat_batched_tensors"><code class="docutils literal notranslate"><span class="pre">concat_batched_tensors()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.collectors.top_k_nplets"><code class="docutils literal notranslate"><span class="pre">top_k_nplets()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.heuristics.greedy.greedy"><code class="docutils literal notranslate"><span class="pre">greedy()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.heuristics.simulated_annealing.random_sampler"><code class="docutils literal notranslate"><span class="pre">random_sampler()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.heuristics.simulated_annealing.simulated_annealing"><code class="docutils literal notranslate"><span class="pre">simulated_annealing()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.heuristics.simulated_annealing_multi_order.hot_encode_to_indexes"><code class="docutils literal notranslate"><span class="pre">hot_encode_to_indexes()</span></code></a></li>
+<li><a class="reference internal" href="#thoi.heuristics.simulated_annealing_multi_order.simulated_annealing_multi_order"><code class="docutils literal notranslate"><span class="pre">simulated_annealing_multi_order()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">THOI</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Welcome to THOI’s documentation!</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="welcome-to-thoi-s-documentation">
+<h1>Welcome to THOI’s documentation!<a class="headerlink" href="#welcome-to-thoi-s-documentation" title="Link to this heading"></a></h1>
+<section id="readme">
+<h2>README<a class="headerlink" href="#readme" title="Link to this heading"></a></h2>
+<section id="thoi-torch-higher-order-interactions">
+<h3>THOI: Torch - Higher Order Interactions<a class="headerlink" href="#thoi-torch-higher-order-interactions" title="Link to this heading"></a></h3>
+<a class="reference internal image-reference" href="https://raw.githubusercontent.com/Laouen/THOI/main/img/logo.png"><img alt="THOI Logo" src="https://raw.githubusercontent.com/Laouen/THOI/main/img/logo.png" style="width: 200px;" />
+</a>
+<section id="description">
+<h4>Description<a class="headerlink" href="#description" title="Link to this heading"></a></h4>
+<p>THOI is a Python package designed to compute O information in Higher Order Interactions using batch processing. This package leverages PyTorch for efficient tensor operations.</p>
+</section>
+<section id="installation">
+<h4>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h4>
+<section id="prerequisites">
+<h5>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h5>
+<p>Ensure you have Python 3.6 or higher installed.</p>
+</section>
+<section id="installing-thoi-with-your-prefered-versions-of-pytorch">
+<h5>Installing THOI with your prefered Versions of PyTorch<a class="headerlink" href="#installing-thoi-with-your-prefered-versions-of-pytorch" title="Link to this heading"></a></h5>
+<p>Because PyTorch installation can depend on the user environment and requirements (GPU or CPU support or a specific version of PyTorch), you need to install PyTorch separately before installing THOI. Follow these steps:</p>
+<ol class="arabic">
+<li><p><strong>Visit the <a class="reference external" href="https://pytorch.org/get-started/locally/">official PyTorch installation guide</a>:</strong></p>
+<ul class="simple">
+<li><p>Go to the PyTorch website and navigate to the “Get Started” page.</p></li>
+<li><p>Select your preferences for the following options:</p>
+<ul>
+<li><p><strong>PyTorch Build:</strong> Stable or LTS (long-term support)</p></li>
+<li><p><strong>Your Operating System:</strong> Linux, Mac, or Windows</p></li>
+<li><p><strong>Package:</strong> Pip (recommended)</p></li>
+<li><p><strong>Language:</strong> Python</p></li>
+<li><p><strong>Compute Platform:</strong> CPU, CUDA 10.2, CUDA 11.1, etc.</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Get the Installation Command:</strong></p>
+<ul>
+<li><p>Based on your selections, the PyTorch website will provide the appropriate installation command.</p></li>
+<li><p>For example, for the CPU-only version, the command will look like this:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="nv">torch</span><span class="o">==</span><span class="m">1</span>.8.1+cpu<span class="w"> </span>-f<span class="w"> </span>https://download.pytorch.org/whl/torch_stable.html
+</pre></div>
+</div>
+</li>
+<li><p>For the GPU version with CUDA 11.1, the command will look like this:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="nv">torch</span><span class="o">==</span><span class="m">1</span>.8.1+cu111<span class="w"> </span>-f<span class="w"> </span>https://download.pytorch.org/whl/torch_stable.html
+</pre></div>
+</div>
+</li>
+</ul>
+</li>
+<li><p><strong>Install PyTorch:</strong></p>
+<ul class="simple">
+<li><p>Copy and run the command provided by the PyTorch website in your terminal.</p></li>
+</ul>
+</li>
+<li><p><strong>Install THOI:</strong></p>
+<ul>
+<li><p>Once PyTorch is installed, install THOI using:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>thoi
+</pre></div>
+</div>
+</li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+<section id="usage">
+<h4>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h4>
+<p>After installation, you can start using THOI in your projects. Here is a simple example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">thoi.measures.gaussian_copula</span><span class="w"> </span><span class="kn">import</span> <span class="n">multi_order_measures</span><span class="p">,</span> <span class="n">nplets_measures</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">thoi.heuristics</span><span class="w"> </span><span class="kn">import</span> <span class="n">simulated_annealing</span><span class="p">,</span> <span class="n">greedy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+
+<span class="c1"># Computation of O information for the nplet that consider all the variables of X</span>
+<span class="n">measures</span> <span class="o">=</span> <span class="n">nplets_measures</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+<span class="c1"># Computation of O info for a single nplet (it must be a list of nplets even if it is a single nplet)</span>
+<span class="n">measures</span> <span class="o">=</span> <span class="n">nplets_measures</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">]])</span>
+
+<span class="c1"># Computation of O info for multiple nplets</span>
+<span class="n">measures</span> <span class="o">=</span> <span class="n">nplets_measures</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">],[</span><span class="mi">3</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">4</span><span class="p">],[</span><span class="mi">2</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="mi">3</span><span class="p">]])</span>
+
+<span class="c1"># Extensive computation of O information measures over all combinations of features in X</span>
+<span class="n">measures</span> <span class="o">=</span> <span class="n">multi_order_measures</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+<span class="c1"># Compute the best 10 combinations of features (nplet) using greedy, starting by exaustive search in</span>
+<span class="c1"># lower order and building from there. Result shows best O information for</span>
+<span class="c1"># each built optimal orders</span>
+<span class="n">best_nplets</span><span class="p">,</span> <span class="n">best_scores</span> <span class="o">=</span> <span class="n">greedy</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">repeat</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="c1"># Compute the best 10 combinations of features (nplet) using simulated annealing: There are two initialization options</span>
+<span class="c1"># 1. Starting by a custom initial solution with shape (repeat, order) explicitely provided by the user.</span>
+<span class="c1"># 2. Selecting random samples from the order.</span>
+<span class="c1"># Result shows best O information for each built optimal orders</span>
+<span class="n">best_nplets</span><span class="p">,</span> <span class="n">best_scores</span> <span class="o">=</span> <span class="n">simulated_annealing</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">repeat</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For detailed usage and examples, please refer to the <a class="reference external" href="https://github.com/Laouen/THOI">documentation</a>.</p>
+</section>
+<section id="contributing">
+<h4>Contributing<a class="headerlink" href="#contributing" title="Link to this heading"></a></h4>
+<p>We welcome contributions from the community. If you encounter any issues or have suggestions for improvements, please open an issue or submit a pull request on GitHub.</p>
+</section>
+<section id="license">
+<h4>License<a class="headerlink" href="#license" title="Link to this heading"></a></h4>
+<p>This project is licensed under the MIT License. See the <a class="reference external" href="https://github.com/Laouen/THOI/blob/10243c2d465dc81ee2180b652d08d3117381a01f/LICENSE">LICENSE</a> file for details.</p>
+</section>
+<section id="citation">
+<h4>Citation<a class="headerlink" href="#citation" title="Link to this heading"></a></h4>
+<p>If you use the <code class="docutils literal notranslate"><span class="pre">thoi</span></code> library in a scientific project, please cite it using one of the following formats:</p>
+<section id="bibtex">
+<h5>BibTeX<a class="headerlink" href="#bibtex" title="Link to this heading"></a></h5>
+<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@misc</span><span class="p">{</span><span class="nl">thoi</span><span class="p">,</span>
+<span class="w">  </span><span class="na">author</span><span class="w">       </span><span class="p">=</span><span class="w"> </span><span class="s">{Laouen Belloli and Rubén Herzog}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">title</span><span class="w">        </span><span class="p">=</span><span class="w"> </span><span class="s">{THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">year</span><span class="w">         </span><span class="p">=</span><span class="w"> </span><span class="s">{2024}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">url</span><span class="w">          </span><span class="p">=</span><span class="w"> </span><span class="s">{https://pypi.org/project/thoi/}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>APA</strong>
+Belloli, L., &amp; Herzog, R. (2023). THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. Retrieved from <a class="reference external" href="https://pypi.org/project/thoi/">https://pypi.org/project/thoi/</a></p>
+<p><strong>MLA</strong>
+Belloli, Laouen, and Rubén Herzog. THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. 2023. Web. <a class="reference external" href="https://pypi.org/project/thoi/">https://pypi.org/project/thoi/</a>.</p>
+</section>
+</section>
+<section id="authors">
+<h4>Authors<a class="headerlink" href="#authors" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><a class="reference external" href="https://www.linkedin.com/in/laouen-belloli/">Laouen Mayal Louan Belloli</a></p></li>
+<li><p><a class="reference external" href="https://www.linkedin.com/in/rherzoga/">Ruben Herzog</a></p></li>
+</ul>
+<p>For more details, visit the <a class="reference external" href="https://github.com/Laouen/THOI">GitHub repository</a>.</p>
+</section>
+</section>
+</section>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Link to this heading"></a></h2>
+<p>MIT License</p>
+<p>Copyright (c) 2024 Laouen Mayal Louan Belloli</p>
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:</p>
+<p>The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.</p>
+<p>THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</p>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+</ul>
+</section>
+<section id="module-thoi.measures.gaussian_copula">
+<span id="functions"></span><h1>Functions<a class="headerlink" href="#module-thoi.measures.gaussian_copula" title="Link to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.measures.gaussian_copula.multi_order_measures">
+<span class="sig-prename descclassname"><span class="pre">thoi.measures.gaussian_copula.</span></span><span class="sig-name descname"><span class="pre">multi_order_measures</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_aggregation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_data_collector</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.measures.gaussian_copula.multi_order_measures" title="Link to this definition"></a></dt>
+<dd><p>Compute multi-order measures (TC, DTC, O, S) for the given data matrix X.</p>
+<dl class="simple">
+<dt>The measurements computed are:</dt><dd><ul class="simple">
+<li><p>Total Correlation (TC)</p></li>
+<li><p>Dual Total Correlation (DTC)</p></li>
+<li><p>O-information (O)</p></li>
+<li><p>S-information (S)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>TensorLikeArray</em>) – Input data, which can be one of the following:
+- A single torch.Tensor or np.ndarray with shape (T, N).
+- A sequence (e.g., list) of torch.Tensor or np.ndarray, each with shape (T, N), representing multiple datasets.
+- A sequence of sequences, where each inner sequence is an array-like object of shape (T, N).
+If <cite>covmat_precomputed</cite> is True, X should be:
+- A single torch.Tensor or np.ndarray covariance matrix with shape (N, N).
+- A sequence of covariance matrices, each with shape (N, N).</p></li>
+<li><p><strong>min_order</strong> (<em>int</em><em>, </em><em>optional</em>) – Minimum order to compute. Default is 3. Note: 3 &lt;= min_order &lt;= max_order &lt;= N.</p></li>
+<li><p><strong>max_order</strong> (<em>int</em><em>, </em><em>optional</em>) – Maximum order to compute. If None, uses N (number of variables). Default is None. Note: min_order &lt;= max_order &lt;= N.</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, X is treated as covariance matrices instead of raw data. Default is False.</p></li>
+<li><p><strong>T</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – Number of samples used to compute bias correction. This parameter is used only if <cite>covmat_precomputed</cite> is True.
+If X is a sequence of covariance matrices, T should be a list of sample sizes corresponding to each matrix.
+If T is None and <cite>covmat_precomputed</cite> is True, bias correction is not applied. Default is None.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – Batch size for DataLoader. Default is 1,000,000.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – Device to use for computation. Default is torch.device(‘cpu’).</p></li>
+<li><p><strong>num_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of workers for DataLoader. Default is 0.</p></li>
+<li><p><strong>batch_aggregation</strong> (<em>callable</em><em>, </em><em>optional</em>) – Function to aggregate the collected batch data into the final result.
+It should accept a list of outputs from <cite>batch_data_collector</cite> and return the final aggregated result.
+The return type of this function determines the return type of <cite>multi_order_measures</cite>.
+By default, it uses <cite>concat_and_sort_csv</cite>, which concatenates CSV data and sorts it, returning a pandas DataFrame.
+For more information see <a class="reference internal" href="#collectors-concat-and-sort-csv"><span class="std std-ref">Collectors Concat and sort CSV</span></a></p></li>
+<li><p><strong>batch_data_collector</strong> (<em>callable</em><em>, </em><em>optional</em>) – <p>Function to process and collect data from each batch.
+It should accept the following parameters:</p>
+<blockquote>
+<div><ul>
+<li><p>nplets: torch.Tensor of n-plet indices, shape (batch_size, order)</p></li>
+<li><p>nplets_tc: torch.Tensor of total correlation values, shape (batch_size, D)</p></li>
+<li><p>nplets_dtc: torch.Tensor of dual total correlation values, shape (batch_size, D)</p></li>
+<li><p>nplets_o: torch.Tensor of O-information values, shape (batch_size, D)</p></li>
+<li><p>nplets_s: torch.Tensor of S-information values, shape (batch_size, D)</p></li>
+<li><p>batch_number: int, the current batch number</p></li>
+</ul>
+</div></blockquote>
+<p>The output of <cite>batch_data_collector</cite> must be compatible with the input expected by <cite>batch_aggregation</cite>.
+By default, it uses <cite>batch_to_csv</cite>, which collects data into CSV. For more information see <a class="reference internal" href="#collectors-batch-to-csv"><span class="std std-ref">Collectors Batch to CSV</span></a></p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Any</em> – The aggregated result of the computed measures. The exact type depends on the <cite>batch_aggregation</cite> function used.
+By default, it returns a pandas DataFrame containing the computed metrics (DTC, TC, O, S), the n-plets indexes,
+the order and the dataset information.</p></li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets. If X is a single dataset, D = 1.</p></li>
+<li><p><strong>N</strong> (<em>int</em>) – Number of variables (features) in each dataset.</p></li>
+<li><p><strong>T</strong> (<em>int</em>) – Number of samples in each dataset (if applicable).</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – The size of the n-plets being analyzed, ranging from <cite>min_order</cite> to <cite>max_order</cite>.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – Number of n-plets processed in each batch.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The default <cite>batch_data_collector</cite> and <cite>batch_aggregation</cite> functions are designed to work together.
+If you provide custom functions, ensure that the output of <cite>batch_data_collector</cite> is compatible with the input of <cite>batch_aggregation</cite>.</p></li>
+<li><p>Ensure that the length of <cite>T</cite> matches the number of datasets when <cite>covmat_precomputed</cite> is <cite>True</cite> and <cite>X</cite> is a sequence of covariance matrices.</p></li>
+<li><p>The function computes measures for all combinations of variables of orders ranging from <cite>min_order</cite> to <cite>max_order</cite>.</p></li>
+<li><p>The function is optimized for batch processing using PyTorch tensors, facilitating efficient computations on large datasets.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p>Using default batch data collector and aggregation:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">multi_order_measures</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">min_order</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">max_order</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Using custom batch data collector and aggregation:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">custom_batch_data_collector</span><span class="p">(</span><span class="n">nplets</span><span class="p">,</span> <span class="n">tc</span><span class="p">,</span> <span class="n">dtc</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">batch_number</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="c1"># Custom processing</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">custom_data</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">custom_batch_aggregation</span><span class="p">(</span><span class="n">batch_data_list</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="c1"># Custom aggregation</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">final_result</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">multi_order_measures</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">X</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">min_order</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">max_order</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">batch_data_collector</span><span class="o">=</span><span class="n">custom_batch_data_collector</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">batch_aggregation</span><span class="o">=</span><span class="n">custom_batch_aggregation</span>
+<span class="gp">... </span><span class="p">)</span>
+</pre></div>
+</div>
+<p class="rubric">References</p>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="id1" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></span>
+<p>Rosas, Fernando E., et al. “Quantifying high-order interdependencies via multivariate extensions of the mutual information.” Physical Review E 100.3 (2019): 032305.</p>
+</aside>
+</aside>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.measures.gaussian_copula.nplets_measures">
+<span class="sig-prename descclassname"><span class="pre">thoi.measures.gaussian_copula.</span></span><span class="sig-name descname"><span class="pre">nplets_measures</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.measures.gaussian_copula.nplets_measures" title="Link to this definition"></a></dt>
+<dd><p>Compute higher-order measures (TC, DTC, O, S) for specified n-plets in the given data matrices X.</p>
+<dl class="simple">
+<dt>The computed measures are:</dt><dd><ul class="simple">
+<li><p><strong>Total Correlation (TC)</strong></p></li>
+<li><p><strong>Dual Total Correlation (DTC)</strong></p></li>
+<li><p><strong>O-information (O)</strong></p></li>
+<li><p><strong>S-information (S)</strong></p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>TensorLikeArray</em>) – Input data, which can be one of the following:
+- A single torch.Tensor or np.ndarray with shape (T, N).
+- A sequence (e.g., list) of torch.Tensor or np.ndarray, each with shape (T, N), representing multiple datasets.
+- A sequence of sequences, where each inner sequence is an array-like object of shape (T, N).
+If <cite>covmat_precomputed</cite> is True, X should be:
+- A single torch.Tensor or np.ndarray covariance matrix with shape (N, N).
+- A sequence of covariance matrices, each with shape (N, N).</p></li>
+<li><p><strong>nplets</strong> (<em>TensorLikeArray</em><em>, </em><em>optional</em>) – The n-plets to calculate the measures, with shape <cite>(n_nplets, order)</cite>. If <cite>None</cite>, all possible n-plets of the given order are considered.</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, X is treated as covariance matrices instead of raw data. Default is False.</p></li>
+<li><p><strong>T</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – Number of samples used to compute bias correction. This parameter is used only if <cite>covmat_precomputed</cite> is True.
+If X is a sequence of covariance matrices, T should be a list of sample sizes corresponding to each matrix.
+If T is None and <cite>covmat_precomputed</cite> is True, bias correction is not applied. Default is None.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – Device to use for computation. Default is torch.device(‘cpu’).</p></li>
+<li><p><strong>verbose</strong> (<em>int</em><em>, </em><em>optional</em>) – Logging verbosity level. Default is <cite>logging.INFO</cite>.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – Batch size for processing n-plets. Default is 1,000,000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>torch.Tensor</em> – Tensor containing the computed measures for each n-plet with shape <cite>(n_nplets, D, 4)</cite></p></li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets. If <cite>X</cite> is a single dataset, <cite>D = 1</cite>.</p></li>
+<li><p><strong>N</strong> (<em>int</em>) – Number of variables (features) in each dataset.</p></li>
+<li><p><strong>T</strong> (<em>int</em>) – Number of samples in each dataset (if applicable).</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – The size of the n-plets being analyzed.</p></li>
+<li><p><strong>n_nplets</strong> (<em>int</em>) – Number of n-plets processed.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p><strong>Compute measures for all possible 3-plets in a single dataset:</strong></p>
+<p><a href="#id2"><span class="problematic" id="id3">``</span></a><a href="#id4"><span class="problematic" id="id5">`</span></a>python
+import torch
+import numpy as np</p>
+<p># Sample data matrix with 100 samples and 5 variables
+X = np.random.randn(100, 5)</p>
+<p># Compute measures for all 3-plets
+measures = nplets_measures(X, nplets=None, covmat_precomputed=False, T=100)
+<a href="#id6"><span class="problematic" id="id7">``</span></a><a href="#id8"><span class="problematic" id="id9">`</span></a></p>
+<p><strong>Compute measures for specific n-plets in multiple datasets:</strong></p>
+<p><a href="#id10"><span class="problematic" id="id11">``</span></a><a href="#id12"><span class="problematic" id="id13">`</span></a>python
+import torch
+import numpy as np</p>
+<p># Sample data matrices for 2 datasets, each with 100 samples and 5 variables
+X1 = np.random.randn(100, 5)
+X2 = np.random.randn(100, 5)
+X = [X1, X2]</p>
+<p># Define specific n-plets to analyze
+nplets = torch.tensor([[0, 1, 2], [1, 2, 3]])</p>
+<p># Compute measures for the specified n-plets
+measures = nplets_measures(X, nplets=nplets, covmat_precomputed=False, T=[100, 100])
+<a href="#id14"><span class="problematic" id="id15">``</span></a><a href="#id16"><span class="problematic" id="id17">`</span></a></p>
+<p><strong>Compute measures with precomputed covariance matrices:</strong></p>
+<p><a href="#id18"><span class="problematic" id="id19">``</span></a><a href="#id20"><span class="problematic" id="id21">`</span></a>python
+import torch
+import numpy as np</p>
+<p># Precompute covariance matrices for 2 datasets
+covmat1 = np.cov(np.random.randn(100, 5), rowvar=False)
+covmat2 = np.cov(np.random.randn(100, 5), rowvar=False)
+X = [covmat1, covmat2]</p>
+<p># Number of samples for each covariance matrix
+T = [100, 100]</p>
+<p># Define specific n-plets to analyze
+nplets = torch.tensor([[0, 1], [2, 3]])</p>
+<p># Compute measures using precomputed covariance matrices
+measures = nplets_measures(X, nplets=nplets, covmat_precomputed=True, T=T)
+<a href="#id22"><span class="problematic" id="id23">``</span></a><a href="#id24"><span class="problematic" id="id25">`</span></a></p>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>If <cite>nplets</cite> is <cite>None</cite>, the function considers all possible n-plets of the specified order within the datasets.</p></li>
+<li><p>Ensure that the length of <cite>T</cite> matches the number of datasets when <cite>covmat_precomputed</cite> is <cite>True</cite> and <cite>X</cite> is a sequence of covariance matrices.</p></li>
+<li><p>The function is optimized for batch processing using PyTorch tensors, facilitating efficient computations on large datasets.</p></li>
+</ul>
+<p class="rubric">References</p>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="id26" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></span>
+<p>Rosas, Fernando E., et al. “Quantifying high-order interdependencies via multivariate extensions of the mutual information.” Physical Review E 100.3 (2019): 032305.</p>
+</aside>
+</aside>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.measures.gaussian_copula_hot_encoded">
+<dt class="sig sig-object py" id="thoi.measures.gaussian_copula_hot_encoded.multi_order_measures_hot_encoded">
+<span class="sig-prename descclassname"><span class="pre">thoi.measures.gaussian_copula_hot_encoded.</span></span><span class="sig-name descname"><span class="pre">multi_order_measures_hot_encoded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_aggregation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_data_collector</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">any</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.measures.gaussian_copula_hot_encoded.multi_order_measures_hot_encoded" title="Link to this definition"></a></dt>
+<dd><p>Compute multi-order Gaussian Copula (GC) measurements for the given data matrix X.
+The measurements computed are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Total Correlation (TC)</p></li>
+<li><p>Dual Total Correlation (DTC)</p></li>
+<li><p>O-information (O)</p></li>
+<li><p>S-information (S)</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>-</em>) – T samples x N variables matrix. if not covmat_precomputed, it should be a numpy array.</p></li>
+<li><p><strong>min_order</strong> (<em>-</em>) – Minimum order to compute (default: 3).</p></li>
+<li><p><strong>max_order</strong> (<em>-</em>) – Maximum order to compute (default: None, will use N).</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>-</em>) – If True, X is a covariance matrix (default: False).</p></li>
+<li><p><strong>T</strong> (<em>-</em>) – Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.</p></li>
+<li><p><strong>batch_size</strong> (<em>-</em>) – Batch size for DataLoader (default: 1000000).</p></li>
+<li><p><strong>device</strong> (<em>-</em>) – The device to use for the computation. Default is ‘cpu’.</p></li>
+<li><p><strong>num_workers</strong> (<em>-</em>) – Number of workers for DataLoader (default: 0).</p></li>
+<li><p><strong>batch_aggregation</strong> (<em>-</em>) – Function to aggregate the batched data (default: pd.concat).</p></li>
+<li><p><strong>batch_data_collector</strong> (<em>-</em>) – Function to collect the batched data (default: batch_to_csv).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame containing computed metrics.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.measures.gaussian_copula_hot_encoded.nplets_measures_hot_encoded">
+<span class="sig-prename descclassname"><span class="pre">thoi.measures.gaussian_copula_hot_encoded.</span></span><span class="sig-name descname"><span class="pre">nplets_measures_hot_encoded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.measures.gaussian_copula_hot_encoded.nplets_measures_hot_encoded" title="Link to this definition"></a></dt>
+<dd><p>Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.</p>
+<p>Parameters:
+- X TensorLikeArray: The input data to compute the nplets. It can be a list of 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
+- nplets (Optional[Union[np.ndarray,torch.Tensor]]): The nplets to calculate the measures with shape (batch_size, order)
+- covmat_precomputed (bool): A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
+- T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
+- device (torch.device): The device to use for the computation. Default is ‘cpu’.
+- batch_size (int): Batch size for processing n-plets. Default is 100,000.</p>
+<p>Returns:
+- torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)</p>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.commons">
+<dt class="sig sig-object py" id="thoi.commons.gaussian_copula">
+<span class="sig-prename descclassname"><span class="pre">thoi.commons.</span></span><span class="sig-name descname"><span class="pre">gaussian_copula</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.commons.gaussian_copula" title="Link to this definition"></a></dt>
+<dd><section id="gaussian-copula-transformation">
+<span id="gaussian-copula"></span><h2>Gaussian Copula Transformation<a class="headerlink" href="#gaussian-copula-transformation" title="Link to this heading"></a></h2>
+<p>Transform the data into a Gaussian copula and compute the covariance matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">param X<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.</p>
+</dd>
+<dt class="field-even">type X<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+<dt class="field-odd">returns<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X_gaussian</strong> (<em>np.ndarray</em>) – The data transformed into the Gaussian copula (same shape as the input).</p></li>
+<li><p><strong>X_gaussian_covmat</strong> (<em>np.ndarray</em>) – The covariance matrix of the Gaussian copula transformed data.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The Gaussian copula transformation involves ranking the data, normalizing the ranks, and applying the inverse CDF of the standard normal distribution.</p></li>
+<li><p>Infinite values resulting from the inverse CDF transformation are set to 0.</p></li>
+<li><p>The covariance matrix is computed from the Gaussian copula transformed data.</p></li>
+</ul>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.commons.gaussian_copula_covmat">
+<span class="sig-prename descclassname"><span class="pre">thoi.commons.</span></span><span class="sig-name descname"><span class="pre">gaussian_copula_covmat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.commons.gaussian_copula_covmat" title="Link to this definition"></a></dt>
+<dd><p>Compute the covariance matrix of the Gaussian copula transformed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>X</strong> (<em>np.ndarray</em>) – A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The covariance matrix of the Gaussian copula transformed data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>This function is a wrapper around <cite>gaussian_copula</cite> to directly return the covariance matrix. For more details, see <a class="reference internal" href="#gaussian-copula"><span class="std std-ref">Gaussian Copula Transformation</span></a>.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.collectors">
+<dt class="sig sig-object py" id="thoi.collectors.batch_to_csv">
+<span class="sig-prename descclassname"><span class="pre">thoi.collectors.</span></span><span class="sig-name descname"><span class="pre">batch_to_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nplets_idxs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_tc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_dtc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_o</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_s</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">only_synergetic</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sep</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'\t'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indexing_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'indexes'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#thoi.collectors.batch_to_csv" title="Link to this definition"></a></dt>
+<dd><section id="collectors-batch-to-csv">
+<span id="id27"></span><h2>Collectors Batch to CSV<a class="headerlink" href="#collectors-batch-to-csv" title="Link to this heading"></a></h2>
+<p>Convert batch results to a pandas DataFrame and optionally save to CSV.</p>
+<p>This function processes the measures computed for n-plets in a batch and converts them into a pandas DataFrame.
+It can also save the DataFrame to a CSV file if an output path is provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">param nplets_idxs<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Indices of the n-plets. Shape: (batch_size, order).</p>
+</dd>
+<dt class="field-even">type nplets_idxs<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+<dt class="field-odd">param nplets_tc<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Total correlation values. Shape: (batch_size, D).</p>
+</dd>
+<dt class="field-even">type nplets_tc<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+<dt class="field-odd">param nplets_dtc<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dual total correlation values. Shape: (batch_size, D).</p>
+</dd>
+<dt class="field-even">type nplets_dtc<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+<dt class="field-odd">param nplets_o<span class="colon">:</span></dt>
+<dd class="field-odd"><p>O-information values. Shape: (batch_size, D).</p>
+</dd>
+<dt class="field-even">type nplets_o<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+<dt class="field-odd">param nplets_s<span class="colon">:</span></dt>
+<dd class="field-odd"><p>S-information values. Shape: (batch_size, D).</p>
+</dd>
+<dt class="field-even">type nplets_s<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.Tensor</p>
+</dd>
+<dt class="field-odd">param bn<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Batch number, used for identification in output files.</p>
+</dd>
+<dt class="field-even">type bn<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">param only_synergetic<span class="colon">:</span></dt>
+<dd class="field-odd"><p>If True, only includes n-plets with negative O-information (synergetic). Default is False.</p>
+</dd>
+<dt class="field-even">type only_synergetic<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool, optional</p>
+</dd>
+<dt class="field-odd">param columns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Names of the variables (features). If None, variable names will be generated as ‘var_0’, ‘var_1’, …, ‘var_N-1’.</p>
+</dd>
+<dt class="field-even">type columns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of str, optional</p>
+</dd>
+<dt class="field-odd">param N<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Total number of variables. Required if <cite>columns</cite> is not provided.</p>
+</dd>
+<dt class="field-even">type N<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, optional</p>
+</dd>
+<dt class="field-odd">param sep<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Separator to use in the CSV file. Default is tab (’t’).</p>
+</dd>
+<dt class="field-even">type sep<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, optional</p>
+</dd>
+<dt class="field-odd">param indexing_method<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Method used to represent n-plets. Can be ‘indexes’ or ‘hot_encoded’. Default is ‘indexes’.</p>
+</dd>
+<dt class="field-even">type indexing_method<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, optional</p>
+</dd>
+<dt class="field-odd">param output_path<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Path to save the CSV file. If None, the DataFrame is returned instead of being saved.</p>
+</dd>
+<dt class="field-even">type output_path<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, optional</p>
+</dd>
+<dt class="field-odd">returns<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><em>pd.DataFrame or None</em> – DataFrame containing the measures and variable information for the n-plets.
+Returns None if <cite>output_path</cite> is provided and the DataFrame is saved to a file.</p></li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets. If measures are computed over multiple datasets, D &gt; 1.</p></li>
+<li><p><strong>N</strong> (<em>int</em>) – Number of variables (features).</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – Number of n-plets in the batch.</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – Order of the n-plets (number of variables in each n-plet).</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function can filter out n-plets with non-negative O-information if <cite>only_synergetic</cite> is True.</p></li>
+<li><p>The resulting DataFrame includes the measures and a binary indicator for each variable indicating its presence in the n-plet.</p></li>
+<li><p>The DataFrame also includes columns for ‘order’ and ‘dataset’.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p><a href="#id28"><span class="problematic" id="id29">``</span></a><a href="#id30"><span class="problematic" id="id31">`</span></a>python
+# Sample inputs
+nplets_idxs = torch.tensor([[0, 1], [1, 2], [0, 2]])
+nplets_tc = torch.rand(3, 1)
+nplets_dtc = torch.rand(3, 1)
+nplets_o = torch.rand(3, 1)
+nplets_s = torch.rand(3, 1)
+bn = 0
+columns = [‘A’, ‘B’, ‘C’]
+N = 3</p>
+<p># Convert batch to DataFrame
+df = batch_to_csv(</p>
+<blockquote>
+<div><p>nplets_idxs,
+nplets_tc,
+nplets_dtc,
+nplets_o,
+nplets_s,
+bn,
+columns=columns,
+N=N</p>
+</div></blockquote>
+<section id="id32">
+<h3>)<a class="headerlink" href="#id32" title="Link to this heading"></a></h3>
+</section>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.collectors.batch_to_tensor">
+<span class="sig-prename descclassname"><span class="pre">thoi.collectors.</span></span><span class="sig-name descname"><span class="pre">batch_to_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nplets_idxs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_tc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_dtc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_o</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_s</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#thoi.collectors.batch_to_tensor" title="Link to this definition"></a></dt>
+<dd><p>Process batch measures and optionally select top-k n-plets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nplets_idxs</strong> (<em>torch.Tensor</em>) – Indices of the n-plets. Shape: (batch_size, order).</p></li>
+<li><p><strong>nplets_tc</strong> (<em>torch.Tensor</em>) – Total correlation values. Shape: (batch_size, D).</p></li>
+<li><p><strong>nplets_dtc</strong> (<em>torch.Tensor</em>) – Dual total correlation values. Shape: (batch_size, D).</p></li>
+<li><p><strong>nplets_o</strong> (<em>torch.Tensor</em>) – O-information values. Shape: (batch_size, D).</p></li>
+<li><p><strong>nplets_s</strong> (<em>torch.Tensor</em>) – S-information values. Shape: (batch_size, D).</p></li>
+<li><p><strong>bn</strong> (<em>int</em><em>, </em><em>optional</em>) – Batch number. Not used in the function but kept for compatibility.</p></li>
+<li><p><strong>top_k</strong> (<em>int</em><em>, </em><em>optional</em>) – If provided, selects the top-k n-plets based on the specified metric.</p></li>
+<li><p><strong>metric</strong> (<em>string with value 'dtc'</em><em>, </em><em>'tc'</em><em>, </em><em>'o'</em><em> or </em><em>'s'</em><em> or </em><em>Callable</em><em>, </em><em>optional</em>) – Metric to use for ranking if <cite>top_k</cite> is provided. Default is ‘o’ (O-information).</p></li>
+<li><p><strong>largest</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, selects n-plets with the largest metric values if false return n-plets with the smalest values. Default is False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]</em> –</p>
+<ul>
+<li><p>n-plets measures. Shape: (batch_size or k, D, 4).</p></li>
+<li><p>n-plets indices. Shape: (batch_size or k, order).</p></li>
+<li><p>Metric values of the selected n-plets if <cite>top_k</cite> is provided, else None.</p></li>
+</ul>
+</li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets.</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – Order of the n-plets.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – Number of n-plets in the batch.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>If <cite>top_k</cite> is provided and less than <cite>batch_size</cite>, the function selects the top-k n-plets based on the metric.</p></li>
+<li><p>The measures are stacked along the last dimension in the order: (tc, dtc, o, s).</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p><a href="#id33"><span class="problematic" id="id34">``</span></a><a href="#id35"><span class="problematic" id="id36">`</span></a>python
+# Sample inputs
+nplets_idxs = torch.tensor([[0, 1], [1, 2], [0, 2]])
+nplets_tc = torch.rand(3, 1)
+nplets_dtc = torch.rand(3, 1)
+nplets_o = torch.rand(3, 1)
+nplets_s = torch.rand(3, 1)</p>
+<p># Process batch without top-k selection
+measures, idxs, _ = batch_to_tensor(</p>
+<blockquote>
+<div><p>nplets_idxs, nplets_tc, nplets_dtc, nplets_o, nplets_s</p>
+</div></blockquote>
+<p>)</p>
+<p># Process batch with top-2 selection based on O-information
+measures_topk, idxs_topk, metric_values = batch_to_tensor(</p>
+<blockquote>
+<div><p>nplets_idxs, nplets_tc, nplets_dtc, nplets_o, nplets_s, top_k=2, metric=’o’, largest=False</p>
+</div></blockquote>
+<section id="id37">
+<h2>)<a class="headerlink" href="#id37" title="Link to this heading"></a></h2>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.collectors.concat_and_sort_csv">
+<span class="sig-prename descclassname"><span class="pre">thoi.collectors.</span></span><span class="sig-name descname"><span class="pre">concat_and_sort_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batched_dataframes</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="headerlink" href="#thoi.collectors.concat_and_sort_csv" title="Link to this definition"></a></dt>
+<dd><section id="collectors-concat-and-sort-csv">
+<span id="id38"></span><h2>Collectors Concat and sort CSV<a class="headerlink" href="#collectors-concat-and-sort-csv" title="Link to this heading"></a></h2>
+<p>Concatenate a list of DataFrames and sort them by the ‘dataset’ column.</p>
+<dl class="field-list simple">
+<dt class="field-odd">param batched_dataframes<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of DataFrames to concatenate and sort.</p>
+</dd>
+<dt class="field-even">type batched_dataframes<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of pd.DataFrame</p>
+</dd>
+<dt class="field-odd">returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The concatenated and sorted DataFrame.</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The DataFrames are concatenated along the rows.</p></li>
+<li><p>Sorting is performed using the ‘dataset’ column in ascending order.</p></li>
+<li><p>The index is reset after sorting.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p><code class="docutils literal notranslate"><span class="pre">`python</span>
+<span class="pre">df1</span> <span class="pre">=</span> <span class="pre">pd.DataFrame({'dataset':</span> <span class="pre">[0,</span> <span class="pre">0],</span> <span class="pre">'value':</span> <span class="pre">[1,</span> <span class="pre">2]})</span>
+<span class="pre">df2</span> <span class="pre">=</span> <span class="pre">pd.DataFrame({'dataset':</span> <span class="pre">[1,</span> <span class="pre">1],</span> <span class="pre">'value':</span> <span class="pre">[3,</span> <span class="pre">4]})</span>
+<span class="pre">combined_df</span> <span class="pre">=</span> <span class="pre">concat_and_sort_csv([df1,</span> <span class="pre">df2])</span>
+<span class="pre">`</span></code></p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.collectors.concat_batched_tensors">
+<span class="sig-prename descclassname"><span class="pre">thoi.collectors.</span></span><span class="sig-name descname"><span class="pre">concat_batched_tensors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batched_tensors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#thoi.collectors.concat_batched_tensors" title="Link to this definition"></a></dt>
+<dd><p>Concatenate batched tensors and optionally select top-k n-plets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batched_tensors</strong> (<em>list</em><em> of </em><em>tuples</em>) – <dl class="simple">
+<dt>Each tuple contains:</dt><dd><ul>
+<li><p>nplets_measures: torch.Tensor, shape (batch_size, D, 4)</p></li>
+<li><p>nplets_idxs: torch.Tensor, shape (batch_size, order)</p></li>
+<li><p>nplets_scores: torch.Tensor or None, shape (batch_size,)</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>top_k</strong> (<em>int</em><em>, </em><em>optional</em>) – If provided, selects the top-k n-plets across all batches. Default is None.</p></li>
+<li><p><strong>metric</strong> (<em>str</em><em> or </em><em>Callable</em><em>, </em><em>optional</em>) – Metric to use for ranking if <cite>top_k</cite> is provided. Default is ‘o’.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, selects n-plets with the largest metric values, if not, select n-plets with smallest values. Default is False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]</em> –</p>
+<ul>
+<li><p>Concatenated n-plets measures. Shape: (total_nplets or k, D, 4).</p></li>
+<li><p>Concatenated n-plets indices. Shape: (total_nplets or k, order).</p></li>
+<li><p>Metric values of the selected n-plets if <cite>top_k</cite> is provided, else None.</p></li>
+</ul>
+</li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets.</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – Order of the n-plets.</p></li>
+<li><p><strong>total_nplets</strong> (<em>int</em>) – Total number of n-plets across all batches.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>If <cite>top_k</cite> is provided, the function selects the top-k n-plets across all batches.</p></li>
+<li><p>If <cite>top_k</cite> is provided, nplets_scores must be provided in <cite>batched_tensors</cite>.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p><a href="#id39"><span class="problematic" id="id40">``</span></a><a href="#id41"><span class="problematic" id="id42">`</span></a>python
+# Suppose we have batched tensors from two batches
+batched_tensors = [</p>
+<blockquote>
+<div><p>(measures_batch1, idxs_batch1, None),
+(measures_batch2, idxs_batch2, None)</p>
+</div></blockquote>
+<p>]</p>
+<p># Concatenate without top-k selection
+measures_all, idxs_all, _ = concat_batched_tensors(batched_tensors)</p>
+<p># Concatenate and select top-5 n-plets based on O-information
+measures_topk, idxs_topk, metric_values = concat_batched_tensors(</p>
+<blockquote>
+<div><p>batched_tensors, top_k=5, metric=’o’, largest=False</p>
+</div></blockquote>
+<section id="id43">
+<h2>)<a class="headerlink" href="#id43" title="Link to this heading"></a></h2>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.collectors.top_k_nplets">
+<span class="sig-prename descclassname"><span class="pre">thoi.collectors.</span></span><span class="sig-name descname"><span class="pre">top_k_nplets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nplets_idxs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nplets_measures</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#thoi.collectors.top_k_nplets" title="Link to this definition"></a></dt>
+<dd><p>Select the top-k n-plets based on a specified metric.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nplets_idxs</strong> (<em>torch.Tensor</em>) – Indices of the n-plets. Shape: (batch_size, order).</p></li>
+<li><p><strong>nplets_measures</strong> (<em>torch.Tensor</em>) – Measures for each n-plet. Shape: (batch_size, D, 4).</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – Number of top n-plets to select.</p></li>
+<li><p><strong>metric</strong> (<em>string with value 'dtc'</em><em>, </em><em>'tc'</em><em>, </em><em>'o'</em><em> or </em><em>'s'</em><em> or </em><em>Callable</em>) – Metric to use for ranking the n-plets. Can be a string specifying a measure (‘tc’, ‘dtc’, ‘o’, ‘s’),
+or a custom callable that takes <cite>nplets_measures</cite> and returns a tensor of values.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em>) – If True, selects n-plets with the largest metric values if false return n-plets with the smalest values. Default is False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Tuple[torch.Tensor, torch.Tensor, torch.Tensor]</em> –</p>
+<ul>
+<li><p>Selected n-plets measures. Shape: (k, D, 4).</p></li>
+<li><p>Selected n-plets indices. Shape: (k, order).</p></li>
+<li><p>Metric values of the selected n-plets. Shape: (k,).</p></li>
+</ul>
+</li>
+<li><p><em>Where</em></p></li>
+<li><p><em>—–</em></p></li>
+<li><p><strong>D</strong> (<em>int</em>) – Number of datasets.</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – Order of the n-plets (number of variables in each n-plet).</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – Number of n-plets in the batch.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function computes the specified metric for each n-plet and selects the top-k based on this metric.</p></li>
+<li><p>The metric can be one of the predefined measures or a custom function.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p><a href="#id44"><span class="problematic" id="id45">``</span></a><a href="#id46"><span class="problematic" id="id47">`</span></a>python
+# Sample data
+nplets_idxs = torch.tensor([[0, 1], [1, 2], [0, 2]])
+nplets_measures = torch.rand(3, 1, 4)  # Assuming D=1
+k = 2
+metric = ‘o’  # Use O-information for ranking</p>
+<p># Get top-k n-plets
+top_measures, top_idxs, top_values = top_k_nplets(</p>
+<blockquote>
+<div><p>nplets_idxs, nplets_measures, k, metric, largest=False</p>
+</div></blockquote>
+<section id="id48">
+<h2>)<a class="headerlink" href="#id48" title="Link to this heading"></a></h2>
+</section>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.heuristics.greedy">
+<dt class="sig sig-object py" id="thoi.heuristics.greedy.greedy">
+<span class="sig-prename descclassname"><span class="pre">thoi.heuristics.greedy.</span></span><span class="sig-name descname"><span class="pre">greedy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat_batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.heuristics.greedy.greedy" title="Link to this definition"></a></dt>
+<dd><p>Greedy algorithm to find the best order of n-plets to maximize the metric for a given multivariate series or covariance matrices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>TensorLikeArray</em>) – The input data to compute the n-plets. It can be a list of 2D numpy arrays or tensors of shape:
+1. (T, N) where T is the number of samples if X are multivariate series.
+2. A list of 2D covariance matrices with shape (N, N).</p></li>
+<li><p><strong>initial_order</strong> (<em>int</em><em>, </em><em>optional</em>) – The initial order to start the greedy algorithm. Default is 3.</p></li>
+<li><p><strong>order</strong> (<em>int</em><em>, </em><em>optional</em>) – The final order to stop the greedy algorithm. If None, it will be set to N.</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>bool</em><em>, </em><em>optional</em>) – A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series. Default is False.</p></li>
+<li><p><strong>T</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – A list of integers indicating the number of samples for each multivariate series. Default is None.</p></li>
+<li><p><strong>repeat</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of repetitions to do to obtain different solutions starting from less optimal initial solutions. Default is 10.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The batch size to use for the computation. Default is 1,000,000.</p></li>
+<li><p><strong>repeat_batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The batch size for repeating the computation. Default is 1,000,000.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The device to use for the computation. Default is ‘cpu’.</p></li>
+<li><p><strong>metric</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Callable</em><em>]</em><em>, </em><em>optional</em>) – The metric to evaluate. One of ‘tc’, ‘dtc’, ‘o’, ‘s’ or a callable function. Default is ‘o’.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em><em>, </em><em>optional</em>) – A flag to indicate if the metric is to be maximized or minimized. Default is False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>best_nplets</strong> (<em>torch.Tensor</em>) – The n-plets with the best score found with shape (repeat, order).</p></li>
+<li><p><strong>best_scores</strong> (<em>torch.Tensor</em>) – The best scores for the best n-plets with shape (repeat,).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function uses a greedy algorithm to iteratively find the best n-plets that maximize or minimize the specified metric.</p></li>
+<li><p>The initial solutions are computed using the <cite>multi_order_measures</cite> function.</p></li>
+<li><p>The function iterates over the remaining orders to get the best solution for each order.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.heuristics.simulated_annealing">
+<dt class="sig sig-object py" id="thoi.heuristics.simulated_annealing.random_sampler">
+<span class="sig-prename descclassname"><span class="pre">thoi.heuristics.simulated_annealing.</span></span><span class="sig-name descname"><span class="pre">random_sampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="headerlink" href="#thoi.heuristics.simulated_annealing.random_sampler" title="Link to this definition"></a></dt>
+<dd><p>Generate random samples of n-plets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>N</strong> (<em>int</em>) – The number of variables.</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – The order of the n-plets.</p></li>
+<li><p><strong>repeat</strong> (<em>int</em>) – The number of samples to generate.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The device to use for the computation. Default is ‘cpu’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tensor of shape (repeat, order) containing the random samples.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.heuristics.simulated_annealing.simulated_annealing">
+<span class="sig-prename descclassname"><span class="pre">thoi.heuristics.simulated_annealing.</span></span><span class="sig-name descname"><span class="pre">simulated_annealing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_solution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iterations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_temp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cooling_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.99</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#thoi.heuristics.simulated_annealing.simulated_annealing" title="Link to this definition"></a></dt>
+<dd><p>Simulated annealing algorithm to find the best n-plets to maximize the metric for a given multivariate series or covariance matrices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>Union</em><em>[</em><em>np.ndarray</em><em>, </em><em>torch.Tensor</em><em>, </em><em>List</em><em>[</em><em>np.ndarray</em><em>]</em><em>, </em><em>List</em><em>[</em><em>torch.Tensor</em><em>]</em><em>]</em>) – The input data to compute the n-plets. It can be a list of 2D numpy arrays or tensors of shape:
+1. (T, N) where T is the number of samples if X are multivariate series.
+2. A list of 2D covariance matrices with shape (N, N).</p></li>
+<li><p><strong>order</strong> (<em>int</em><em>, </em><em>optional</em>) – The order of the n-plets. If None, it will be set to N.</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>bool</em><em>, </em><em>optional</em>) – A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series. Default is False.</p></li>
+<li><p><strong>T</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – A list of integers indicating the number of samples for each multivariate series. Default is None.</p></li>
+<li><p><strong>initial_solution</strong> (<em>torch.Tensor</em><em>, </em><em>optional</em>) – The initial solution with shape (repeat, order). If None, a random initial solution is generated.</p></li>
+<li><p><strong>repeat</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of repetitions to do to obtain different solutions starting from less optimal initial solutions. Default is 10.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The batch size to use for the computation. Default is 1,000,000.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The device to use for the computation. Default is ‘cpu’.</p></li>
+<li><p><strong>max_iterations</strong> (<em>int</em><em>, </em><em>optional</em>) – The maximum number of iterations for the simulated annealing algorithm. Default is 1000.</p></li>
+<li><p><strong>early_stop</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of iterations with no improvement to stop early. Default is 100.</p></li>
+<li><p><strong>initial_temp</strong> (<em>float</em><em>, </em><em>optional</em>) – The initial temperature for the simulated annealing algorithm. Default is 100.0.</p></li>
+<li><p><strong>cooling_rate</strong> (<em>float</em><em>, </em><em>optional</em>) – The cooling rate for the simulated annealing algorithm. Default is 0.99.</p></li>
+<li><p><strong>metric</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Callable</em><em>]</em><em>, </em><em>optional</em>) – The metric to evaluate. One of ‘tc’, ‘dtc’, ‘o’, ‘s’ or a callable function. Default is ‘o’.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em><em>, </em><em>optional</em>) – A flag to indicate if the metric is to be maximized or minimized. Default is False.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em><em>, </em><em>optional</em>) – Logging verbosity level. Default is <cite>logging.INFO</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>best_solution</strong> (<em>torch.Tensor</em>) – The n-plets with the best score found with shape (repeat, order).</p></li>
+<li><p><strong>best_energy</strong> (<em>torch.Tensor</em>) – The best scores for the best n-plets with shape (repeat,).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function uses a simulated annealing algorithm to iteratively find the best n-plets that maximize or minimize the specified metric.</p></li>
+<li><p>The initial solutions are computed using the <cite>random_sampler</cite> function if not provided.</p></li>
+<li><p>The function iterates over the remaining orders to get the best solution for each order.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function" id="module-thoi.heuristics.simulated_annealing_multi_order">
+<dt class="sig sig-object py" id="thoi.heuristics.simulated_annealing_multi_order.hot_encode_to_indexes">
+<span class="sig-prename descclassname"><span class="pre">thoi.heuristics.simulated_annealing_multi_order.</span></span><span class="sig-name descname"><span class="pre">hot_encode_to_indexes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nplets</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#thoi.heuristics.simulated_annealing_multi_order.hot_encode_to_indexes" title="Link to this definition"></a></dt>
+<dd><p>Convert hot-encoded n-plets to index-based representation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>nplets</strong> (<em>torch.Tensor</em>) – The hot-encoded n-plets with shape (batch_size, N).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The index-based representation of the n-plets with shape (batch_size, order).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="thoi.heuristics.simulated_annealing_multi_order.simulated_annealing_multi_order">
+<span class="sig-prename descclassname"><span class="pre">thoi.heuristics.simulated_annealing_multi_order.</span></span><span class="sig-name descname"><span class="pre">simulated_annealing_multi_order</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covmat_precomputed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_solution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">device(type='cpu')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_iterations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">early_stop</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_temp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cooling_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.99</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'o'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">largest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#thoi.heuristics.simulated_annealing_multi_order.simulated_annealing_multi_order" title="Link to this definition"></a></dt>
+<dd><p>Simulated annealing algorithm to find the best multi-order n-plets to maximize the metric for a given multivariate series or covariance matrices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>Union</em><em>[</em><em>np.ndarray</em><em>, </em><em>torch.Tensor</em><em>, </em><em>List</em><em>[</em><em>np.ndarray</em><em>]</em><em>, </em><em>List</em><em>[</em><em>torch.Tensor</em><em>]</em><em>]</em>) – The input data to compute the n-plets. It can be a list of 2D numpy arrays or tensors of shape:
+1. (T, N) where T is the number of samples if X are multivariate series.
+2. A list of 2D covariance matrices with shape (N, N).</p></li>
+<li><p><strong>covmat_precomputed</strong> (<em>bool</em><em>, </em><em>optional</em>) – A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series. Default is False.</p></li>
+<li><p><strong>T</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – A list of integers indicating the number of samples for each multivariate series. Default is None.</p></li>
+<li><p><strong>initial_solution</strong> (<em>torch.Tensor</em><em>, </em><em>optional</em>) – The initial solution with shape (repeat, N). If None, a random initial solution is generated.</p></li>
+<li><p><strong>repeat</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of repetitions to do to obtain different solutions starting from less optimal initial solutions. Default is 10.</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The batch size to use for the computation. Default is 1,000,000.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The device to use for the computation. Default is ‘cpu’.</p></li>
+<li><p><strong>max_iterations</strong> (<em>int</em><em>, </em><em>optional</em>) – The maximum number of iterations for the simulated annealing algorithm. Default is 1000.</p></li>
+<li><p><strong>early_stop</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of iterations with no improvement to stop early. Default is 100.</p></li>
+<li><p><strong>initial_temp</strong> (<em>float</em><em>, </em><em>optional</em>) – The initial temperature for the simulated annealing algorithm. Default is 100.0.</p></li>
+<li><p><strong>cooling_rate</strong> (<em>float</em><em>, </em><em>optional</em>) – The cooling rate for the simulated annealing algorithm. Default is 0.99.</p></li>
+<li><p><strong>step_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of elements to change in each step. Default is 1.</p></li>
+<li><p><strong>metric</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>Callable</em><em>]</em><em>, </em><em>optional</em>) – The metric to evaluate. One of ‘tc’, ‘dtc’, ‘o’, ‘s’ or a callable function. Default is ‘o’.</p></li>
+<li><p><strong>largest</strong> (<em>bool</em><em>, </em><em>optional</em>) – A flag to indicate if the metric is to be maximized or minimized. Default is False.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em><em>, </em><em>optional</em>) – Logging verbosity level. Default is <cite>logging.INFO</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>best_solution</strong> (<em>torch.Tensor</em>) – The n-plets with the best score found with shape (repeat, N).</p></li>
+<li><p><strong>best_energy</strong> (<em>torch.Tensor</em>) – The best scores for the best n-plets with shape (repeat,).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function uses a simulated annealing algorithm to iteratively find the best n-plets that maximize or minimize the specified metric.</p></li>
+<li><p>The initial solutions are computed using the <cite>_random_solutions</cite> function if not provided.</p></li>
+<li><p>The function iterates over the remaining orders to get the best solution for each order.</p></li>
+</ul>
+</dd></dl>
+
+<div class="toctree-wrapper compound">
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Laouen Belloli.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

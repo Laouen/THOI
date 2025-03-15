@@ -113,17 +113,29 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
                                     bcNmin1: torch.Tensor,
                                     marginal_entropies: Optional[torch.Tensor] = None):
 
-    '''
-    Brief: Compute the total correlation (tc), dual total correlation (dtc), o-information (o) and s-information (s) for the given batch of covariance matrices.
-    
-    Parameters:
-    - covmats (torch.Tensor): The covariance matrices with shape (batch_size, N, N)
-    - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (batch_size, N, N-1)
-    - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size)
-    - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size)
-    - bcNmin1 (torch.Tensor): The bias corrector for the order-1 with shape (batch_size)
-    - marginal_entropies (Optional[torch.Tensor]): The marginal entropies for each variable with shape (batch_size, N). If None, it will be dynamically computed
-    '''
+    """
+    Compute the total correlation (TC), dual total correlation (DTC), o-information (O), and s-information (S) for the given batch of covariance matrices.
+
+    Parameters
+    ----------
+    covmats : torch.Tensor
+        The covariance matrices with shape (batch_size, N, N).
+    allmin1 : torch.Tensor
+        The indexes of marginal covariance matrices with shape (batch_size, N, N-1).
+    bc1 : torch.Tensor
+        The bias corrector for the first order with shape (batch_size).
+    bcN : torch.Tensor
+        The bias corrector for the order with shape (batch_size).
+    bcNmin1 : torch.Tensor
+        The bias corrector for the order-1 with shape (batch_size).
+    marginal_entropies : Optional[torch.Tensor], optional
+        The marginal entropies for each variable with shape (batch_size, N). If None, it will be dynamically computed.
+
+    Returns
+    -------
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+        The computed measures: total correlation (TC), dual total correlation (DTC), o-information (O), and s-information (S).
+    """
 
     N = covmats.shape[1]
 
@@ -282,7 +294,7 @@ def nplets_measures(X: Union[TensorLikeArray],
     measures = nplets_measures(X, nplets=nplets, covmat_precomputed=True, T=T)
     ```
 
-    **Notes**
+    Notes
     -----
     - If `nplets` is `None`, the function considers all possible n-plets of the specified order within the datasets.
     - Ensure that the length of `T` matches the number of datasets when `covmat_precomputed` is `True` and `X` is a sequence of covariance matrices.

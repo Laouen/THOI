@@ -9,8 +9,26 @@ from thoi.heuristics.commons import _get_valid_candidates
 from thoi.commons import _normalize_input_data
 
 @torch.no_grad()
-def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=None):
+def random_sampler(N: int, order: int, repeat: int, device: Optional[torch.device] = None) -> torch.Tensor:
+    """
+    Generate random samples of n-plets.
 
+    Parameters
+    ----------
+    N : int
+        The number of variables.
+    order : int
+        The order of the n-plets.
+    repeat : int
+        The number of samples to generate.
+    device : torch.device, optional
+        The device to use for the computation. Default is 'cpu'.
+
+    Returns
+    -------
+    torch.Tensor
+        A tensor of shape (repeat, order) containing the random samples.
+    """
     device = torch.device('cpu') if device is None else device
 
     return torch.stack([
@@ -20,10 +38,10 @@ def random_sampler(N:int, order:int, repeat:int, device:Optional[torch.device]=N
 
 @torch.no_grad()
 def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]],
-                        order: Optional[int]=None,
+                        order: Optional[int] = None,
                         *,
-                        covmat_precomputed: bool=False,
-                        T: Optional[Union[int, List[int]]]=None,
+                        covmat_precomputed: bool = False,
+                        T: Optional[Union[int, List[int]]] = None,
                         initial_solution: Optional[torch.Tensor] = None,
                         repeat: int = 10,
                         batch_size: int = 1000000,
@@ -32,9 +50,60 @@ def simulated_annealing(X: Union[np.ndarray, torch.Tensor, List[np.ndarray], Lis
                         early_stop: int = 100,
                         initial_temp: float = 100.0,
                         cooling_rate: float = 0.99,
-                        metric: Union[str,Callable]='o', # tc, dtc, o, s
+                        metric: Union[str, Callable] = 'o',  # tc, dtc, o, s
                         largest: bool = False,
-                        verbose: int = logging.INFO):
+                        verbose: int = logging.INFO) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Simulated annealing algorithm to find the best n-plets to maximize the metric for a given multivariate series or covariance matrices.
+
+    Parameters
+    ----------
+    X : Union[np.ndarray, torch.Tensor, List[np.ndarray], List[torch.Tensor]]
+        The input data to compute the n-plets. It can be a list of 2D numpy arrays or tensors of shape:
+        1. (T, N) where T is the number of samples if X are multivariate series.
+        2. A list of 2D covariance matrices with shape (N, N).
+    order : int, optional
+        The order of the n-plets. If None, it will be set to N.
+    covmat_precomputed : bool, optional
+        A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series. Default is False.
+    T : int or list of int, optional
+        A list of integers indicating the number of samples for each multivariate series. Default is None.
+    initial_solution : torch.Tensor, optional
+        The initial solution with shape (repeat, order). If None, a random initial solution is generated.
+    repeat : int, optional
+        The number of repetitions to do to obtain different solutions starting from less optimal initial solutions. Default is 10.
+    batch_size : int, optional
+        The batch size to use for the computation. Default is 1,000,000.
+    device : torch.device, optional
+        The device to use for the computation. Default is 'cpu'.
+    max_iterations : int, optional
+        The maximum number of iterations for the simulated annealing algorithm. Default is 1000.
+    early_stop : int, optional
+        The number of iterations with no improvement to stop early. Default is 100.
+    initial_temp : float, optional
+        The initial temperature for the simulated annealing algorithm. Default is 100.0.
+    cooling_rate : float, optional
+        The cooling rate for the simulated annealing algorithm. Default is 0.99.
+    metric : Union[str, Callable], optional
+        The metric to evaluate. One of 'tc', 'dtc', 'o', 's' or a callable function. Default is 'o'.
+    largest : bool, optional
+        A flag to indicate if the metric is to be maximized or minimized. Default is False.
+    verbose : int, optional
+        Logging verbosity level. Default is `logging.INFO`.
+
+    Returns
+    -------
+    best_solution : torch.Tensor
+        The n-plets with the best score found with shape (repeat, order).
+    best_energy : torch.Tensor
+        The best scores for the best n-plets with shape (repeat,).
+
+    Notes
+    -----
+    - The function uses a simulated annealing algorithm to iteratively find the best n-plets that maximize or minimize the specified metric.
+    - The initial solutions are computed using the `random_sampler` function if not provided.
+    - The function iterates over the remaining orders to get the best solution for each order.
+    """
     
     logging.basicConfig(
         level=verbose,

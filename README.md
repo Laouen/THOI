@@ -92,7 +92,7 @@ We welcome contributions from the community. If you encounter any issues or have
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/Laouen/THOI/blob/10243c2d465dc81ee2180b652d08d3117381a01f/LICENSE) file for details.
 
 ## Citation
 

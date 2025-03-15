@@ -23,14 +23,30 @@ def _get_string_metric(batched_res: np.ndarray, metric:str):
 
 def gaussian_copula(X: np.ndarray):
     """
+    .. _gaussian_copula:
+    
+    Gaussian Copula Transformation
+    ==============================
+    
     Transform the data into a Gaussian copula and compute the covariance matrix.
 
-    Parameters:
-    - X: A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
+    Parameters
+    ----------
+    X : np.ndarray
+        A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
 
-    Returns:
-    - X_gaussian: The data transformed into the Gaussian copula (same shape as the parameter input).
-    - X_gaussian_covmat: The covariance matrix of the Gaussian copula transformed data.
+    Returns
+    -------
+    X_gaussian : np.ndarray
+        The data transformed into the Gaussian copula (same shape as the input).
+    X_gaussian_covmat : np.ndarray
+        The covariance matrix of the Gaussian copula transformed data.
+
+    Notes
+    -----
+    - The Gaussian copula transformation involves ranking the data, normalizing the ranks, and applying the inverse CDF of the standard normal distribution.
+    - Infinite values resulting from the inverse CDF transformation are set to 0.
+    - The covariance matrix is computed from the Gaussian copula transformed data.
     """
 
     assert X.ndim == 2, f'data must be 2D but got {X.ndim}D data input'
@@ -54,6 +70,23 @@ def gaussian_copula(X: np.ndarray):
     return X_gaussian, X_gaussian_covmat
 
 def gaussian_copula_covmat(X: np.ndarray):
+    """
+    Compute the covariance matrix of the Gaussian copula transformed data.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
+
+    Returns
+    -------
+    np.ndarray
+        The covariance matrix of the Gaussian copula transformed data.
+
+    Notes
+    -----
+    - This function is a wrapper around `gaussian_copula` to directly return the covariance matrix. For more details, see :ref:`gaussian_copula`.
+    """
     return gaussian_copula(X)[1]
 
 def _to_numpy(X):
@@ -74,15 +107,39 @@ def _normalize_input_data(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          device: torch.device=torch.device('cpu')):
-    '''
-    brief: Normalize the input data to be a list of covariance matrices with shape (D, N, N) where D is the lenght of the list and N is the number of variables in the system.
+    """
+    Normalize the input data to be a list of covariance matrices with shape (D, N, N).
 
-    Parameters:
-    - X: A list or a single 2D numpy arrays or tensors of shape: 1. (T, N) where T is the number of samples if X are multivariate series. 2. a list of 2D covariance matrices with shape (N, N).
-    - covmat_precomputed: A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series.
-    - T (optional): A list of integers indicating the number of samples for each multivariate series.
-    - device: The device to use for the computation. Default is 'cpu'.
-    '''
+    Parameters
+    ----------
+    X : TensorLikeArray
+        A list or a single 2D numpy array or tensor of shape:
+        1. (T, N) where T is the number of samples if X are multivariate series.
+        2. A list of 2D covariance matrices with shape (N, N).
+    covmat_precomputed : bool, optional
+        A boolean flag to indicate if the input data is a list of covariance matrices or multivariate series. Default is False.
+    T : int or list of int, optional
+        A list of integers indicating the number of samples for each multivariate series. Default is None.
+    device : torch.device, optional
+        The device to use for the computation. Default is 'cpu'.
+
+    Returns
+    -------
+    covmats : torch.Tensor
+        The normalized covariance matrices with shape (D, N, N).
+    D : int
+        The number of datasets.
+    N : int
+        The number of variables in the system.
+    T : list of int
+        The number of samples for each multivariate series.
+
+    Notes
+    -----
+    - If `covmat_precomputed` is True, the input data is treated as covariance matrices.
+    - If `covmat_precomputed` is False, the input data is treated as multivariate series and the covariance matrices are computed using the Gaussian copula transformation.
+    - The function ensures that the covariance matrices are sent to the specified device.
+    """
 
     # Handle different options for X parameter. Accept multivariate data or covariance matrix
     if covmat_precomputed:
