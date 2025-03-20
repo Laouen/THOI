@@ -101,11 +101,11 @@ If you use the `thoi` library in a scientific project, please cite it using one 
 ### BibTeX
 
 ```bibtex
-@misc{thoi,
-  author       = {Laouen Belloli and Rubén Herzog},
-  title        = {THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing},
-  year         = {2024},
-  url          = {https://pypi.org/project/thoi/}
+@article{belloli2025thoi,
+  title={THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing},
+  author={Belloli, Laouen and Mediano, Pedro and Cofr{\'e}, Rodrigo and Slezak, Diego Fernandez and Herzog, Rub{\'e}n},
+  journal={arXiv preprint arXiv:2501.03381},
+  year={2025}
 }
 ```
 
