@@ -110,10 +110,10 @@ If you use the `thoi` library in a scientific project, please cite it using one 
 ```
 
 **APA**
-Belloli, L., & Herzog, R. (2023). THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. Retrieved from https://pypi.org/project/thoi/
+Belloli, L., Mediano, P., Cofré, R., Slezak, D. F., & Herzog, R. (2025). THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing. arXiv preprint arXiv:2501.03381.
 
 **MLA**
-Belloli, Laouen, and Rubén Herzog. THOI: An efficient library for higher order interactions analysis based on Gaussian copulas enhanced by batch-processing. 2023. Web. https://pypi.org/project/thoi/.
+Belloli, Laouen, et al. "THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing." arXiv preprint arXiv:2501.03381 (2025).
 
 
 ## Authors
