@@ -40,6 +40,7 @@ jobs:
         git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
         git tag $new_version
         git push origin $new_version
+        echo "new_version=$new_version" >> $GITHUB_ENV
     - name: Build package
       run: python -m build
     - name: Publish package
@@ -47,3 +48,13 @@ jobs:
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN }}
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.new_version }}
+        release_name: ${{ env.new_version }}
+        body: Release ${{ env.new_version }}
+        draft: false
+        prerelease: false
