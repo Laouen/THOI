@@ -859,7 +859,9 @@ def local_multi_order_measures(
     dtype: torch.dtype = torch.float32,
     batch_size: int = 100000, 
     time_chunk: int = 4096, 
-    eps: float = 1e-10
+    eps: float = 1e-10,
+    covmats: Optional[torch.Tensor] = None,
+    precomputed: bool = False
 ) -> dict:
     """
     Compute local measures for every order in [min_order, max_order] on the full set of variables.
@@ -876,7 +878,8 @@ def local_multi_order_measures(
         Input data which can be:
         - A single torch.Tensor or np.ndarray with shape (T, N)
         - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
-        Must be normalized using normalize_input_data first.
+        When precomputed=False: Must be normalized using normalize_input_data first.
+        When precomputed=True: Must be already normalized data with shape (D, T, N).
     min_order : int, default=3
         Minimum order of interactions to compute
     max_order : int, optional
@@ -891,6 +894,12 @@ def local_multi_order_measures(
         Time chunk size for memory optimization
     eps : float, default=1e-10
         Numerical stability epsilon
+    covmats : torch.Tensor, optional
+        Pre-computed covariance matrices with shape [D, N, N].
+        Required when precomputed=True, optional otherwise.
+    precomputed : bool, default=False
+        If True, assumes X is already normalized data and covmats are provided.
+        If False, performs full preprocessing including gaussian_copula_cov_opt.
         
     Returns
     -------
@@ -900,38 +909,65 @@ def local_multi_order_measures(
     """
     from ..commons import gaussian_copula_cov_opt
     
-    # Ensure X is in the correct format for gaussian_copula_cov_opt (needs 3D: D, T, N)
-    if isinstance(X, np.ndarray):
-        if X.ndim == 2:
+    if precomputed:
+        # Use provided normalized data and covariance matrices
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        
+        # Ensure X is properly formatted normalized data
+        normalized_data = torch.as_tensor(X, dtype=dtype, device=device)
+        if normalized_data.dim() == 2:
             # Single dataset: (T, N) -> (1, T, N)
-            X = X[np.newaxis, :, :]
-        X_tensor = torch.tensor(X, dtype=dtype)
-    elif isinstance(X, torch.Tensor):
-        if X.ndim == 2:
-            # Single dataset: (T, N) -> (1, T, N) 
-            X = X.unsqueeze(0)
-        X_tensor = X.to(dtype=dtype)
-    elif isinstance(X, (list, tuple)):
-        # Multiple datasets: [(T, N), ...] -> (D, T, N)
-        X_tensor = torch.stack([torch.tensor(x, dtype=dtype) for x in X])
-    else:
-        X_tensor = torch.tensor(X, dtype=dtype)
-        if X_tensor.ndim == 2:
-            X_tensor = X_tensor.unsqueeze(0)
-    
-    # Normalize input data and get covariance matrices using gaussian_copula_cov_opt
-    # This ensures proper Gaussian distributions with the correct covariance structure
-    normalized_data, covmats = gaussian_copula_cov_opt(X_tensor, return_xg=True)
-    
-    # Determine data dimensions
-    if hasattr(normalized_data, 'dim') and normalized_data.dim()==3:
+            normalized_data = normalized_data.unsqueeze(0)
+        elif normalized_data.dim() != 3:
+            raise ValueError('When precomputed=True, X must be normalized data with shape (D, T, N) or (T, N)')
+        
+        # Ensure covmats is properly formatted
+        covmats = torch.as_tensor(covmats, dtype=dtype, device=device)
+        if covmats.dim() == 2:
+            # Single covariance matrix: (N, N) -> (1, N, N)
+            covmats = covmats.unsqueeze(0)
+        elif covmats.dim() != 3:
+            raise ValueError('When precomputed=True, covmats must have shape (D, N, N) or (N, N)')
+        
+        # Check compatibility
         D, T, N = normalized_data.shape
-    elif isinstance(normalized_data, (list,tuple)):
-        T, N = normalized_data[0].shape
-        D = len(normalized_data)
+        if covmats.shape != (D, N, N):
+            raise ValueError(f'covmats shape {covmats.shape} is not compatible with normalized_data shape {normalized_data.shape}')
     else:
-        T, N = normalized_data.shape
-        D = 1
+        # Standard preprocessing path: normalize input data using gaussian_copula_cov_opt
+        # Ensure X is in the correct format for gaussian_copula_cov_opt (needs 3D: D, T, N)
+        if isinstance(X, np.ndarray):
+            if X.ndim == 2:
+                # Single dataset: (T, N) -> (1, T, N)
+                X = X[np.newaxis, :, :]
+            X_tensor = torch.tensor(X, dtype=dtype)
+        elif isinstance(X, torch.Tensor):
+            if X.ndim == 2:
+                # Single dataset: (T, N) -> (1, T, N) 
+                X = X.unsqueeze(0)
+            X_tensor = X.to(dtype=dtype)
+        elif isinstance(X, (list, tuple)):
+            # Multiple datasets: [(T, N), ...] -> (D, T, N)
+            X_tensor = torch.stack([torch.tensor(x, dtype=dtype) for x in X])
+        else:
+            X_tensor = torch.tensor(X, dtype=dtype)
+            if X_tensor.ndim == 2:
+                X_tensor = X_tensor.unsqueeze(0)
+        
+        # Normalize input data and get covariance matrices using gaussian_copula_cov_opt
+        # This ensures proper Gaussian distributions with the correct covariance structure
+        normalized_data, covmats = gaussian_copula_cov_opt(X_tensor, return_xg=True)
+        
+        # Determine data dimensions
+        if hasattr(normalized_data, 'dim') and normalized_data.dim()==3:
+            D, T, N = normalized_data.shape
+        elif isinstance(normalized_data, (list,tuple)):
+            T, N = normalized_data[0].shape
+            D = len(normalized_data)
+        else:
+            T, N = normalized_data.shape
+            D = 1
         
     if max_order is None: 
         max_order = N
@@ -959,7 +995,9 @@ def time_averaged_local_measures(
     batch_size: int = 100000, 
     time_chunk: int = 4096, 
     eps: float = 1e-10,
-    bias_correction: bool = True
+    bias_correction: bool = True,
+    covmats: Optional[torch.Tensor] = None,
+    precomputed: bool = False
 ) -> dict:
     """
     Compute time-averaged local measures with optional bias correction.
@@ -973,7 +1011,8 @@ def time_averaged_local_measures(
         Input data which can be:
         - A single torch.Tensor or np.ndarray with shape (T, N)
         - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
-        Must be normalized using normalize_input_data first.
+        When precomputed=False: Must be normalized using normalize_input_data first.
+        When precomputed=True: Must be already normalized data with shape (D, T, N).
     min_order : int, default=3
         Minimum order of interactions to compute
     max_order : int, optional
@@ -990,6 +1029,12 @@ def time_averaged_local_measures(
         Small value for numerical stability
     bias_correction : bool, default=True
         Whether to apply bias correction after temporal averaging
+    covmats : torch.Tensor, optional
+        Pre-computed covariance matrices with shape [D, N, N].
+        Required when precomputed=True, optional otherwise.
+    precomputed : bool, default=False
+        If True, assumes X is already normalized data and covmats are provided.
+        If False, performs full preprocessing including gaussian_copula_cov_opt.
         
     Returns
     -------
@@ -1007,7 +1052,9 @@ def time_averaged_local_measures(
         dtype=dtype,
         batch_size=batch_size,
         time_chunk=time_chunk,
-        eps=eps
+        eps=eps,
+        covmats=covmats,
+        precomputed=precomputed
     )
 
     # Time-average the results and apply bias correction AFTER temporal averaging
