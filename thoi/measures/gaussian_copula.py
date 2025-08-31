@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Union, List
+from typing import Optional, Callable, Union, List, Tuple
 
 from tqdm import tqdm
 from functools import partial
@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
+import scipy.special as sp
 
 from thoi.typing import TensorLikeArray
 from thoi.commons import _normalize_input_data
@@ -1039,3 +1040,979 @@ def time_averaged_local_measures(
             averaged_results[K] = time_averaged
 
     return averaged_results
+
+
+# ============================================================================
+# TIME-DELAYED MEASURES - YOUR HIGH-PERFORMANCE FUNCTIONS
+# ============================================================================
+
+def generate_stacked_lagged_batches(data_list: List[torch.Tensor], shifts: torch.Tensor) -> torch.Tensor:
+    """
+    Stack shifted versions of multivariate time series.
+
+    Parameters
+    ----------
+    data_list : list of L tensors, each of shape (T, N)
+    shifts    : tensor of lags (e.g., torch.tensor([0, 1, 2, 5]))
+
+    Returns
+    -------
+    Tensor of shape (L, T - max(shifts), len(shifts) * N)
+    """
+    L = len(data_list)
+    T, N = data_list[0].shape
+    device = data_list[0].device
+    shifts = shifts.to(device)
+    max_shift = int(shifts.max().item())
+
+    X_tensor = torch.stack(data_list)  # (L, T, N)
+
+    # Build shifted indices
+    idx_base = torch.arange(T - max_shift, device=device)
+    idx = idx_base.unsqueeze(0) + shifts.view(-1, 1)  # (len(shifts), T - max_shift)
+
+    # Apply shifts
+    lagged = X_tensor[:, idx, :]  # (L, len(shifts), T - max_shift, N)
+    lagged = lagged.permute(0, 2, 1, 3).reshape(L, T - max_shift, -1)
+
+    return lagged  # (L, T - max_shift, len(shifts) * N)
+
+
+@torch.no_grad()
+def batch_local_ais_torch(
+    data_batch: torch.Tensor,   # [L, T, k*N] salida de generate_stacked_lagged_batches
+    cov_batch:  torch.Tensor,   # [L, k*N, k*N] cov por bloque, mismo orden de shifts
+    shifts:     torch.Tensor,   # [k] con shifts; shifts[0] debe ser 0
+    eps: float = 1e-10,
+    device: str = 'cpu',
+):
+    """
+    Devuelve:
+      i_local : [L, T, k-1]  nats, local AIS por retardo (excluye shift 0)
+      auc     : [L, T]       nats·lag, integral trapezoidal en shifts[1:]
+    """
+    L, T, D = data_batch.shape
+    k = shifts.numel()
+    assert D % k == 0, "D debe ser múltiplo de len(shifts)"
+    N = D // k
+
+    data_batch = data_batch.to(device)
+    cov_batch  = cov_batch.to(device)
+    shifts     = shifts.to(device)
+
+    eyeN = torch.eye(N, device=device)
+
+    # --- helpers de bloques (0 = presente, 1..k-1 = pasados según 'shifts')
+    def block(i, j):
+        return cov_batch[:, i*N:(i+1)*N, j*N:(j+1)*N]  # [L,N,N]
+
+    Sigma_t  = block(0, 0) + eps * eyeN                          # [L,N,N]
+    Sigma_y  = torch.stack([block(s, s) for s in range(1, k)], 1) + eps * eyeN  # [L,k-1,N,N]
+    Sigma_ty = torch.stack([block(0, s) for s in range(1, k)], 1)              # [L,k-1,N,N]
+    Sigma_yt = Sigma_ty.transpose(-1, -2)                                       # [L,k-1,N,N]
+
+    # --- Cholesky y logdets
+    L_t = torch.linalg.cholesky(Sigma_t)                                        # [L,N,N]
+    logdet_t = 2.0 * torch.log(torch.diagonal(L_t, dim1=-2, dim2=-1)).sum(-1)  # [L]
+
+    L_y = torch.linalg.cholesky(Sigma_y)                                        # [L,k-1,N,N]
+    # Σ_{t|y} = Σ_t - Σ_ty Σ_y^{-1} Σ_yt
+    M = torch.cholesky_solve(Sigma_yt, L_y)                                     # [L,k-1,N,N]
+    Sigma_cond = Sigma_t.unsqueeze(1) - torch.matmul(Sigma_ty, M) + eps * eyeN  # [L,k-1,N,N]
+    L_cond = torch.linalg.cholesky(Sigma_cond)                                  # [L,k-1,N,N]
+    logdet_cond = 2.0 * torch.log(torch.diagonal(L_cond, dim1=-2, dim2=-1)).sum(-1)  # [L,k-1]
+
+    # --- datos x_t y pasados y_{τ}
+    x = data_batch[:, :, :N]                                                    # [L,T,N]
+    y = torch.stack([data_batch[:, :, s*N:(s+1)*N] for s in range(1, k)], 2)    # [L,T,k-1,N]
+
+    # x^T Σ_t^{-1} x
+    z_marg = torch.cholesky_solve(x.transpose(1, 2), L_t)                       # [L,N,T]
+    quad_marg = (x.transpose(1, 2) * z_marg).sum(1)                              # [L,T]
+
+    # μ = Σ_ty Σ_y^{-1} y
+    y_rhs = y.permute(0, 2, 3, 1)                                               # [L,k-1,N,T]
+    y_inv = torch.cholesky_solve(y_rhs, L_y)                                     # [L,k-1,N,T]
+    mu = torch.matmul(Sigma_ty, y_inv).permute(0, 3, 1, 2)                       # [L,T,k-1,N]
+
+    # (x-μ)^T Σ_{t|y}^{-1} (x-μ)
+    diff = x.unsqueeze(2) - mu                                                  # [L,T,k-1,N]
+    diff_T = diff.permute(0, 2, 3, 1)                                           # [L,k-1,N,T]
+    z_cond = torch.cholesky_solve(diff_T, L_cond)                               # [L,k-1,N,T]
+    quad_cond = (diff_T * z_cond).sum(2).permute(0, 2, 1)                        # [L,T,k-1]
+
+    # i_local(t,τ) = 0.5[log|Σ_t| - log|Σ_{t|y_τ}|] + 0.5[x^T Σ_t^{-1} x - (x-μ)^T Σ_{t|y}^{-1}(x-μ)]
+    i_local = 0.5 * (logdet_t[:, None, None] - logdet_cond[:, None, :]) + 0.5 * (quad_marg[:, :, None] - quad_cond)  # [L,T,k-1]
+
+    return i_local
+
+
+def gaussian_mi_bias_correction(T: int) -> torch.Tensor:
+    """Compute the bias correction for Gaussian mutual information"""
+    return torch.tensor((sp.psi((T-1)/2) - sp.psi((T-2)/2)) / 2)
+
+
+def gaussian_ais_bias_correction(N: int, T: int, device='cpu') -> torch.Tensor:
+    if T is None:
+        return torch.tensor(0.0, device=device)
+    def bias_H(n):
+        psi_terms = torch.from_numpy(sp.psi((T - np.arange(1, n + 1)) / 2)).to(device)
+        return 0.5 * (n * torch.log(torch.tensor(2.0/(T-1), device=device)) + psi_terms.sum())
+    return bias_H(N) + bias_H(N) - bias_H(2 * N)
+
+
+def compute_ais(
+    cov_batch: torch.Tensor,
+    lags: torch.Tensor,
+    bias: torch.Tensor,
+    device: str = 'cpu',
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    B, D, _ = cov_batch.shape
+    k = len(lags)
+    N = D // (k)
+    cov_batch = cov_batch + 1e-10 * torch.eye(D, device=device).unsqueeze(0)
+    idx_t = torch.arange(N, device=device)
+    Σ_t = cov_batch[:, idx_t][:, :, idx_t]
+    Σ_lag = torch.stack([
+        cov_batch[:, τ*N:(τ+1)*N, τ*N:(τ+1)*N]
+        for τ in range(1, k)
+    ], dim=1)
+    joint_idx = torch.stack([
+        torch.cat([idx_t, torch.arange(τ*N,(τ+1)*N,device=device)])
+        for τ in range(1, k)
+    ])
+    batch_idx = torch.arange(B, device=device)[:,None,None,None]
+    ji = joint_idx.unsqueeze(0).expand(B,-1,-1)
+    rows = ji.unsqueeze(3).expand(-1,-1,-1,2*N)
+    cols = ji.unsqueeze(2).expand(-1,-1,2*N,-1)
+    Σ_joint = cov_batch[batch_idx, rows, cols]
+    log_det_past  = torch.logdet(Σ_lag)
+    log_det_joint = torch.logdet(Σ_joint)
+    log_det_t     = torch.logdet(Σ_t)
+    ais = 0.5*(log_det_past + log_det_t.unsqueeze(1) - log_det_joint) - bias
+    ais = torch.clamp(ais, min=0.0)
+    return ais 
+
+
+def extract_subcov_batch_vec(
+    cov_full: torch.Tensor,
+    idxs: torch.Tensor,        # shape: (S, g)
+    N_total: int,   
+) -> torch.Tensor:
+    """
+    Extract sub-covariances from full lagged matrix using arbitrary lag positions.
+
+    Supports both a single covariance matrix of shape (D, D) and a batch
+    of covariance matrices of shape (B, D, D). When given a batch it returns
+    a tensor of shape (B, S, g*k, g*k); when given a single matrix it returns
+    (S, g*k, g*k).
+
+    Parameters
+    ----------
+    cov_full : (D, D) or (B, D, D)
+    idxs     : (S, g)   
+    N_total  : number of channels
+
+    Returns
+    -------
+    (S, g·(k), g·(k)) covariance blocks or (B, S, g·(k), g·(k)) for batched input
+    """
+    S, g = idxs.shape
+    # Determine whether input is batched
+    batched = cov_full.dim() == 3
+    if batched:
+        B, D, _ = cov_full.shape
+        device = cov_full.device
+    else:
+        D = cov_full.size(0)
+        device = cov_full.device
+
+    # inferir cuántos lags tenemos
+    L = D // N_total  # debe ser entero
+
+    # offsets de bloque = [0, N_total, 2*N_total, ..., (L-1)*N_total]
+    lag_offsets = torch.arange(L, device=device).view(L, 1, 1) * N_total  # (L,1,1)
+
+    # para cada subset y cada lag sumamos offset
+    # base: (L, S, g)
+    base = idxs.unsqueeze(0) + lag_offsets
+
+    # aplanamos a (S, L*g)
+    flat = base.permute(1, 0, 2).reshape(S, L * g)  # (S, L*g)
+
+    # construimos índices de filas/columnas (S, L*g, L*g)
+    rows = flat.unsqueeze(2).expand(-1, -1, L * g)
+    cols = flat.unsqueeze(1).expand(-1, L * g, -1)
+
+    if not batched:
+        # extraemos para single matrix -> (S, L*g, L*g)
+        return cov_full[rows, cols]
+    else:
+        # For batched input, build a batch index to perform elementwise advanced indexing
+        # rows/cols -> expand to (B, S, L*g, L*g)
+        rows_b = rows.unsqueeze(0).expand(B, -1, -1, -1)
+        cols_b = cols.unsqueeze(0).expand(B, -1, -1, -1)
+        batch_idx = torch.arange(B, device=device).view(B, 1, 1, 1).expand(-1, S, L * g, L * g)
+        # cov_full is (B, D, D); advanced indexing returns (B, S, L*g, L*g)
+        return cov_full[batch_idx, rows_b, cols_b]
+
+
+@torch.no_grad()
+def batch_compute_tdmi_xcorr_torch(
+    cov_batch: torch.Tensor,
+    lags: torch.Tensor,
+    device: str = 'cpu',
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute time‐delayed mutual information (TDMI) with bias‐correction and
+    cross‐correlation (XCORR) for all variable pairs across specified lags,
+    by extracting both from a single time‐embedded covariance batch.
+
+    Parameters
+    ----------
+    cov_batch : torch.Tensor, shape (B, D, D)
+        Batch of full lagged covariance matrices. D = N_vars * n_lags.
+    lags      : torch.Tensor, shape (k,)
+        Lag indices (including zero).
+    device    : str, default 'cpu'
+        Device on which to perform the computations.
+
+    Returns
+    -------
+    tdmi  : torch.Tensor, shape (B, k, N, N)
+        Bias‐corrected time‐delayed mutual information for each variable‐pair at each lag.
+    xcorr : torch.Tensor, shape (B, k, N, N)
+        Time‐delayed Pearson correlation coefficients for each pair at each lag.
+    """
+    B, D, _ = cov_batch.shape
+    k = lags.numel()
+    N = D // k
+
+    # ensure numerical stability and move to device
+    cov_batch = cov_batch.to(device) + 1e-10 * torch.eye(D, device=device).unsqueeze(0)
+
+    # Cov(X_{t-τ}, X_t) for each lag τ
+    Sigma_lagged = torch.stack([
+        cov_batch[:, τ * N:(τ + 1) * N, :N]
+        for τ in range(k)
+    ], dim=1)  # → (B, k, N, N)
+
+    # Covariance & variance at time t
+    Sigma_t = cov_batch[:, :N, :N]               # (B, N, N)
+    var_t   = torch.diagonal(Sigma_t, offset=0, dim1=1, dim2=2)       # (B, N)
+    std_t   = torch.sqrt(var_t)                   # (B, N)
+
+    # ----- cross‐correlation -----
+    denom_corr = std_t.unsqueeze(2) * std_t.unsqueeze(1)       # (B, N, N)
+    denom_corr = denom_corr.unsqueeze(1).expand(-1, k, -1, -1)  # (B, k, N, N)
+    xcorr = Sigma_lagged / (denom_corr + 1e-10)
+    xcorr = torch.clamp(xcorr, -0.999999, 0.999999)
+
+   
+    # compute Gaussian mutual information: I = -½ log(1 - ρ²)
+    tdmi = -0.5 * torch.log1p(-xcorr.pow(2))
+
+    return tdmi, xcorr
+
+
+def build_full_tdmi(
+    measure: torch.Tensor
+) -> torch.Tensor:
+    """
+    Vectorized construction of full, symmetric TDMI series for all batches
+    and variable pairs, returning a torch.Tensor.
+
+    Parameters
+    ----------
+    measure : torch.Tensor, shape (B, k, N, N)
+        Batch‐dimension TDMI tensor for non‐negative lags:
+        measure[b, τ, i, j] = I(X_i(t); X_j(t−τ)).
+
+    Returns
+    -------
+    full_tdmi : torch.Tensor, shape (B, N, N, 2*k - 1)
+        Combined TDMI for lags from −(k−1) to +(k−1):
+        full_tdmi[b, i, j, :] = [I(j→i, backwards), …, I(i→j, forwards)].
+        Diagonal (i==j) entries are set to NaN.
+    """
+    _, k, N, _ = measure.shape
+    # L = 2*k - 1
+
+    # Forward: (B, k, N, N)
+    m_fwd = measure
+
+    # Backward: swap i/j, reverse lag axis, drop duplicate zero‐lag
+    m_bwd = measure.transpose(2, 3)           # (B, k, N, N)
+    m_bwd = torch.flip(m_bwd, dims=[1])       # reverse along lag dim → (B, k, N, N)
+    m_bwd = m_bwd[:, :-1, :, :]               # drop last frame → (B, k-1, N, N)
+
+    # Concatenate backward + forward → (B, 2k-1, N, N)
+    m_full = torch.cat([m_bwd, m_fwd], dim=1)
+
+    # Permute to (B, N, N, 2k-1)
+    full_tdmi = m_full.permute(0, 2, 3, 1)
+
+    # Mask diagonal entries
+    eye = torch.eye(N, device=measure.device, dtype=torch.bool)
+    mask = eye.unsqueeze(0).unsqueeze(-1)     # → (1, N, N, 1), broadcastable
+    full_tdmi = full_tdmi.masked_fill(mask, float('nan'))
+
+    return full_tdmi
+
+
+# ============================================================================
+# WRAPPER FUNCTIONS FOR AIS AND TDMI
+# ============================================================================
+
+@torch.no_grad()
+def local_ais(
+    X: TensorLikeArray,
+    shifts: Union[List[int], torch.Tensor, np.ndarray],
+    *,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    eps: float = 1e-10,
+    covmats: Optional[torch.Tensor] = None,
+    precomputed: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Wrapper function for computing Local Active Information Storage (AIS).
+    
+    This function takes raw input data, applies the necessary preprocessing 
+    (stacked lagging and Gaussian copula normalization), and computes the 
+    local AIS using your optimized batch_local_ais_torch function.
+    
+    Parameters
+    ----------
+    X : TensorLikeArray
+        Input data which can be:
+        - A single torch.Tensor or np.ndarray with shape (T, N)
+        - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
+    shifts : array-like
+        Lag values including 0. Must start with 0 (present time).
+        Example: [0, 1, 2, 5] for lags 0, 1, 2, and 5 time steps.
+    device : str, default='cpu'
+        Device for computation
+    dtype : torch.dtype, default=torch.float32
+        Data type for computation
+    eps : float, default=1e-10
+        Numerical stability epsilon
+        
+    Returns
+    -------
+    i_local : torch.Tensor
+        Local AIS values with shape [L, T, k-1] where k-1 excludes lag 0
+    auc : torch.Tensor  
+        Area under curve (integral) over lags with shape [L, T]
+    """
+    from ..commons import gaussian_copula_cov_opt
+
+    # Minimal parsing of shifts and validation
+    shifts_tensor = torch.as_tensor(shifts, dtype=torch.int32, device=device)
+    if shifts_tensor.numel() == 0 or shifts_tensor[0].item() != 0:
+        raise ValueError("shifts must start with 0 (present time)")
+
+    # Helper to ensure covmats is a batched tensor
+    def _ensure_batched_cov(cov):
+        c = torch.as_tensor(cov, dtype=dtype, device=device)
+        if c.dim() == 2:
+            c = c.unsqueeze(0)
+        return c
+
+    # PRECOMPUTED branch: expect covmats and stacked normalized data
+    if precomputed:
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        covmats = _ensure_batched_cov(covmats)
+
+        normalized_data = torch.as_tensor(X, dtype=dtype, device=device)
+        if normalized_data.dim() == 2:
+            normalized_data = normalized_data.unsqueeze(0)
+        if normalized_data.dim() != 3:
+            raise ValueError('When precomputed=True, X must be stacked lagged normalized data with shape (B, T_eff, D)')
+
+        # Basic compatibility check
+        if covmats.shape[1] != normalized_data.shape[2] or covmats.shape[2] != normalized_data.shape[2]:
+            raise ValueError('covmats dimensionality is not compatible with provided stacked X')
+
+    # NOT precomputed: build lagged stacks and normalize once
+    if not precomputed:
+        # Normalize input into a list of (T,N) tensors
+        if isinstance(X, (torch.Tensor, np.ndarray)):
+            if hasattr(X, 'dim') and X.dim() == 2:
+                data_list = [torch.as_tensor(X, dtype=dtype, device=device)]
+            elif isinstance(X, np.ndarray) and X.ndim == 2:
+                data_list = [torch.tensor(X, dtype=dtype, device=device)]
+            else:
+                raise ValueError("Single dataset must have shape (T, N)")
+        elif isinstance(X, (list, tuple)):
+            data_list = [torch.as_tensor(x, dtype=dtype, device=device) for x in X]
+        else:
+            raise ValueError("X must be array-like or list of array-like")
+
+        lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
+        # Only compute normalization/covmats if not provided by precomputed branch
+        normalized_data, covmats = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+
+    # Single unified call to the optimized function
+    return batch_local_ais_torch(normalized_data, covmats, shifts_tensor, eps=eps, device=device)
+
+
+@torch.no_grad()
+def ais(
+    X: TensorLikeArray,
+    shifts: Union[List[int], torch.Tensor, np.ndarray],
+    *,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    bias_correction: bool = True,
+    covmats: Optional[torch.Tensor] = None,
+    T: Optional[int] = None,
+    precomputed: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Wrapper function for computing Active Information Storage (AIS) directly 
+    (non-local version) using the whole dataset.
+    
+    This function computes AIS using determinant-based calculations rather than
+    the local (time-resolved) approach, providing average AIS values across lags.
+    
+    Parameters
+    ----------
+    X : TensorLikeArray
+        Input data which can be:
+        - A single torch.Tensor or np.ndarray with shape (T, N)
+        - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
+    shifts : array-like
+        Lag values including 0. Must start with 0 (present time).
+        Example: [0, 1, 2, 5] for lags 0, 1, 2, and 5 time steps.
+    device : str, default='cpu'
+        Device for computation
+    dtype : torch.dtype, default=torch.float32
+        Data type for computation
+    bias_correction : bool, default=True
+        Whether to apply bias correction to the results
+        
+    Returns
+    -------
+    ais : torch.Tensor
+        AIS values with shape [B, k-1] where k-1 excludes lag 0
+    """
+    from ..commons import gaussian_copula_cov_opt
+
+    # Minimal parsing of shifts and validation
+    shifts_tensor = torch.as_tensor(shifts, dtype=torch.int32, device=device)
+    if shifts_tensor.numel() == 0 or shifts_tensor[0].item() != 0:
+        raise ValueError("shifts must start with 0 (present time)")
+    k = shifts_tensor.numel()
+
+    def _ensure_batched_cov(cov):
+        c = torch.as_tensor(cov, dtype=dtype, device=device)
+        if c.dim() == 2:
+            c = c.unsqueeze(0)
+        return c
+
+    def _build_bias(B, N_vars, T_samples):
+        if bias_correction and T_samples is not None:
+            bias_corr = gaussian_ais_bias_correction(N_vars, T_samples, device=device)
+            return bias_corr.unsqueeze(0).expand(B, k - 1).to(device)
+        elif bias_correction and T_samples is None:
+            return torch.zeros(B, k - 1, device=device)
+        else:
+            return torch.zeros(B, k - 1, device=device)
+
+    # PRECOMPUTED: use provided covmats (and optional X for T inference)
+    if precomputed:
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        covmats = _ensure_batched_cov(covmats)
+
+        B, D, _ = covmats.shape
+        if D % k != 0:
+            raise ValueError('covmats dimensionality is not compatible with provided shifts')
+        N_vars = D // k
+
+        # Infer temporal samples for bias correction (if possible)
+        if X is not None:
+            X_tensor = torch.as_tensor(X, dtype=dtype, device=device)
+            if X_tensor.dim() == 2:
+                T_samples = X_tensor.shape[0]
+            elif X_tensor.dim() == 3:
+                T_samples = X_tensor.shape[1]
+            else:
+                T_samples = T
+        else:
+            T_samples = T
+
+        # Build bias tensor for precomputed path
+        bias_tensor = _build_bias(B, N_vars, T_samples)
+    else:
+        # NOT precomputed: build lagged stacks and normalize once
+        if isinstance(X, (torch.Tensor, np.ndarray)):
+            if hasattr(X, 'dim') and X.dim() == 2:
+                data_list = [torch.as_tensor(X, dtype=dtype, device=device)]
+            elif isinstance(X, np.ndarray) and X.ndim == 2:
+                data_list = [torch.tensor(X, dtype=dtype, device=device)]
+            else:
+                raise ValueError("Single dataset must have shape (T, N)")
+        elif isinstance(X, (list, tuple)):
+            data_list = [torch.as_tensor(x, dtype=dtype, device=device) for x in X]
+        else:
+            raise ValueError("X must be array-like or list of array-like")
+
+        lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
+        normalized_data, covmats = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        # Prepare bias using actual temporal length if not set by precomputed branch    
+        T_samples = normalized_data.shape[1]
+        N_vars = lagged_data.shape[2] // k
+        B = covmats.shape[0]
+        # Build bias tensor once and call compute_ais a single time
+        bias_tensor = _build_bias(B, N_vars, T_samples)
+
+
+
+
+    return compute_ais(covmats, shifts_tensor, bias_tensor, device=device)
+
+
+@torch.no_grad()
+def ais_subset(
+    X: Optional[TensorLikeArray] = None,
+    shifts: Union[List[int], torch.Tensor, np.ndarray] = None,
+    idxs: Union[List[int], torch.Tensor, np.ndarray] = None,
+    *,
+    covmats: Optional[torch.Tensor] = None,
+    T: Optional[int] = None,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    bias_correction: bool = True,
+    precomputed: bool = False,
+) -> torch.Tensor:
+    """
+    Compute AIS for a specific subset of variables using extract_subcov_batch_vec.
+
+    Parameters
+    ----------
+    X : optional
+        Raw data (single array (T,N) or list of arrays). If provided, `covmats` is ignored.
+    shifts : array-like
+        Lags including 0. Must start with 0.
+    idxs : array-like
+        Indices of variables in the original N to include in the subset (e.g. [0,2,3]).
+    covmats : optional
+        Precomputed full lagged covariance matrix/matrices with shape [B, D, D] or [D, D].
+    T : int, optional
+        Number of samples used to compute bias correction when providing covmats directly.
+    device, dtype, bias_correction : same as other wrappers.
+
+    Returns
+    -------
+    torch.Tensor
+        AIS values with shape [B, k-1] (or [B, S, k-1] if multiple index-sets provided)
+    """
+    from ..commons import gaussian_copula_cov_opt
+    if shifts is None:
+        raise ValueError('shifts must be provided')
+    if idxs is None and covmats is None and X is None:
+        raise ValueError('Either idxs and X or covmats must be provided')
+
+    # Prepare shifts tensor on device
+    shifts_tensor = torch.as_tensor(shifts, dtype=torch.long, device=device)
+    if shifts_tensor.numel() == 0 or shifts_tensor[0].item() != 0:
+        raise ValueError('shifts must start with 0 (present time)')
+
+    k = shifts_tensor.numel()
+
+    # If precomputed=True we expect covmats to be passed and X (if passed) to be
+    # already the stacked/normalized representation (shape: B, T_eff, D).
+    covmats_full = None
+    normalized_data = None
+
+    if precomputed:
+        # Use provided covmats (required in precomputed mode)
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        covmats_full = torch.as_tensor(covmats, dtype=dtype, device=device)
+
+        # If X is provided, check compatibility: X should be stacked (B, T_eff, D)
+        if X is not None:
+            X_tensor = torch.as_tensor(X, dtype=dtype, device=device)
+            if X_tensor.dim() == 2:
+                # single dataset provided as (T_eff, D) -> make batched
+                X_tensor = X_tensor.unsqueeze(0)
+            if X_tensor.dim() != 3:
+                raise ValueError('When precomputed=True, X must be stacked lagged data with shape (B, T_eff, D)')
+            # ensure covmats D matches X D
+            if covmats_full.dim() == 2:
+                covmats_full = covmats_full.unsqueeze(0)
+            if covmats_full.shape[1] != X_tensor.shape[2] or covmats_full.shape[2] != X_tensor.shape[2]:
+                raise ValueError('covmats dimensionality is not compatible with provided stacked X')
+            normalized_data = X_tensor
+    else:
+        # If raw data provided, compute lagged covmats first
+        if X is not None:
+            # Normalize input to list format
+            if isinstance(X, (torch.Tensor, np.ndarray)):
+                if hasattr(X, 'ndim') and X.ndim == 2:
+                    data_list = [torch.as_tensor(X, dtype=dtype, device=device)]
+                else:
+                    raise ValueError('Single dataset must have shape (T, N)')
+            elif isinstance(X, (list, tuple)):
+                data_list = [torch.as_tensor(x, dtype=dtype, device=device) for x in X]
+            else:
+                raise ValueError('X must be array-like or list of array-like')
+
+            # Generate stacked lagged batches and compute covariance matrices
+            lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
+            normalized_data, covmats_full = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+
+        # If covmats argument provided use it (overrides X)
+        if covmats is not None:
+            covmats_full = torch.as_tensor(covmats, dtype=dtype, device=device)
+
+    if covmats_full is None:
+        raise ValueError('Unable to obtain covariance matrices from X or covmats')
+
+    # Ensure batched shape (B, D, D)
+    if covmats_full.dim() == 2:
+        covmats_full = covmats_full.unsqueeze(0)
+    B, D, _ = covmats_full.shape
+
+    # Prepare idxs tensor: support 1D (single set) or 2D (multiple sets)
+    idxs_tensor = torch.as_tensor(idxs, dtype=torch.long, device=device)
+    if idxs_tensor.dim() == 1:
+        idxs_tensor = idxs_tensor.unsqueeze(0)  # (S=1, g)
+    S, g = idxs_tensor.shape
+
+    # infer N_total (channels per lag)
+    N_total = D // k
+    if N_total * k != D:
+        raise ValueError('covmats dimensionality is not compatible with provided shifts')
+
+    # Vectorized extraction: returns (B, S, g*k, g*k)
+    subcovs = extract_subcov_batch_vec(covmats_full, idxs_tensor, N_total)
+    # subcovs should be (B, S, gk, gk)
+    if subcovs.dim() == 3:
+        # single matrix returned (S, gk, gk) -> make batched
+        subcovs = subcovs.unsqueeze(0)
+
+    # reshape to (B*S, gk, gk) for compute_ais
+    gk = g * k
+    cov_sub_batch = subcovs.reshape(B * S, gk, gk)
+
+    # Determine number of temporal samples for bias correction
+    if normalized_data is not None:
+        T_samples = normalized_data.shape[1]
+    else:
+        T_samples = T
+
+    # Prepare bias tensor per batch element
+    if bias_correction and T_samples is not None:
+        bias_corr = gaussian_ais_bias_correction(g, T_samples, device=device)
+        bias_tensor = bias_corr.unsqueeze(0).expand(B * S, k - 1).to(device)
+    elif bias_correction and T_samples is None:
+        # cannot compute bias without T: fallback to zeros
+        bias_tensor = torch.zeros(B * S, k - 1, device=device)
+    else:
+        bias_tensor = torch.zeros(B * S, k - 1, device=device)
+
+    # Compute AIS on the extracted subcovariances (fully vectorized)
+    ais_vals = compute_ais(cov_sub_batch, shifts_tensor, bias_tensor, device=device)
+
+    # Reshape back to (B, S, k-1) and squeeze single-S if needed
+    ais_vals = ais_vals.view(B, S, -1)
+    if S == 1:
+        ais_vals = ais_vals.squeeze(1)
+
+    return ais_vals
+
+
+@torch.no_grad()
+def local_ais_subset(
+    X: Optional[TensorLikeArray] = None,
+    shifts: Union[List[int], torch.Tensor, np.ndarray] = None,
+    idxs: Union[List[int], torch.Tensor, np.ndarray] = None,
+    *,
+    covmats: Optional[torch.Tensor] = None,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    eps: float = 1e-10,
+    precomputed: bool = False,
+) -> torch.Tensor:
+    """
+    Compute local AIS for subsets of variables (vectorized, batched, no loops).
+
+    This function expects raw data `X` in the same format used by `local_ais`:
+    - a single (T, N) array/tensor or a list of (T, N) arrays -> will be treated
+      as B datasets. It will build the lagged stacked representation using
+      `generate_stacked_lagged_batches` and normalize it with
+      `gaussian_copula_cov_opt`.
+
+    Parameters
+    ----------
+    X : required
+        Raw data (single T×N array or list of T×N arrays). Normalized data is
+        derived internally.
+    shifts : array-like
+        Lag values including 0 (must start with 0).
+    idxs : array-like (S, g) or (g,)
+        Indices of variables to include in each subset. Can be a single set
+        (g,) or multiple sets (S, g).
+    covmats : optional
+        If provided, overrides covariances computed from X when extracting
+        sub-block covariances. Note: X is still required because local AIS
+        needs time-resolved normalized data.
+    Returns
+    -------
+    torch.Tensor
+        Local AIS values with shape [B, S, T, k-1] (or [B, T, k-1] when S==1).
+    """
+    from ..commons import gaussian_copula_cov_opt
+
+    # Minimal argument validation
+    if shifts is None or idxs is None:
+        raise ValueError('shifts and idxs must be provided')
+
+    shifts_tensor = torch.as_tensor(shifts, dtype=torch.long, device=device)
+    if shifts_tensor.numel() == 0 or shifts_tensor[0].item() != 0:
+        raise ValueError('shifts must start with 0')
+
+    k = shifts_tensor.numel()
+
+    covmats_full = None
+    normalized_data = None
+
+    if precomputed:
+        # precomputed expects stacked/normalized X and covmats provided
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        covmats_full = torch.as_tensor(covmats, dtype=dtype, device=device)
+
+        if X is None:
+            raise ValueError('X (stacked normalized data) must be provided when precomputed=True')
+        X_tensor = torch.as_tensor(X, dtype=dtype, device=device)
+        if X_tensor.dim() == 2:
+            X_tensor = X_tensor.unsqueeze(0)
+        if X_tensor.dim() != 3:
+            raise ValueError('When precomputed=True, X must be stacked lagged normalized data with shape (B, T_eff, D)')
+
+        # Ensure covmats batch dims
+        if covmats_full.dim() == 2:
+            covmats_full = covmats_full.unsqueeze(0)
+
+        # Check compatibility between X and covmats
+        if covmats_full.shape[1] != X_tensor.shape[2] or covmats_full.shape[2] != X_tensor.shape[2]:
+            raise ValueError('covmats dimensionality is not compatible with provided stacked X')
+
+        normalized_data = X_tensor
+        B, T_eff, D = normalized_data.shape
+    else:
+        # Prepare data list and build lagged stacked batches
+        if X is None:
+            raise ValueError('X (raw data) must be provided for local AIS (time-resolved)')
+        if isinstance(X, (torch.Tensor, np.ndarray)):
+            if hasattr(X, 'ndim') and X.ndim == 2:
+                data_list = [torch.as_tensor(X, dtype=dtype, device=device)]
+            else:
+                raise ValueError('Single dataset must have shape (T, N)')
+        elif isinstance(X, (list, tuple)):
+            data_list = [torch.as_tensor(x, dtype=dtype, device=device) for x in X]
+        else:
+            raise ValueError('X must be array-like or list of array-like')
+
+        lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)  # [B, T_eff, k*N]
+        normalized_data, covmats_full = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+
+        # covmats argument overrides internal covmats for extraction if provided
+        if covmats is not None:
+            covmats_full = torch.as_tensor(covmats, dtype=dtype, device=device)
+
+        # Ensure batched covmats
+        if covmats_full.dim() == 2:
+            covmats_full = covmats_full.unsqueeze(0)
+        B, T_eff, D = normalized_data.shape
+
+    # idxs -> (S, g)
+    idxs_tensor = torch.as_tensor(idxs, dtype=torch.long, device=device)
+    if idxs_tensor.dim() == 1:
+        idxs_tensor = idxs_tensor.unsqueeze(0)
+    S, g = idxs_tensor.shape
+
+    # infer channels per lag
+    N_total = D // k
+
+    # build per-subset column indices: (S, k, g) -> (S, k*g)
+    lag_offsets = (torch.arange(k, device=device, dtype=torch.long).view(k, 1) * N_total)  # (k,1)
+    # positions: (k, S, g)
+    positions = (lag_offsets.unsqueeze(1) + idxs_tensor.unsqueeze(0))  # (k,S,g)
+    positions = positions.permute(1, 0, 2).reshape(S, k * g)  # (S, k*g)
+
+    # Gather selected columns from normalized_data in a batched, vectorized way
+    # normalized_data: (B, T_eff, D) -> expand to (B, S, T_eff, D)
+    Xexp = normalized_data.unsqueeze(1).expand(B, S, T_eff, D)
+    # indices for gather -> (B, S, T_eff, k*g)
+    idx_gather = positions.unsqueeze(0).unsqueeze(2).expand(B, S, T_eff, k * g)
+    data_selected = torch.gather(Xexp, dim=3, index=idx_gather)  # (B, S, T_eff, k*g)
+
+    # reshape to (B*S, T_eff, k*g) to match batch_local_ais_torch input convention
+    data_batch = data_selected.reshape(B * S, T_eff, k * g)
+
+    # Extract covariance sub-blocks for each subset: (B, S, gk, gk)
+    subcovs = extract_subcov_batch_vec(covmats_full, idxs_tensor, N_total)
+    if subcovs.dim() == 3:
+        subcovs = subcovs.unsqueeze(0)
+    cov_sub_batch = subcovs.reshape(B * S, g * k, g * k)
+
+    # Compute local AIS on the batched subsets
+    i_local = batch_local_ais_torch(
+        data_batch,      # [B*S, T_eff, k*g]
+        cov_sub_batch,   # [B*S, k*g, k*g]
+        shifts_tensor,   # shifts
+        eps=eps,
+        device=device,
+    )  # returns [B*S, T_eff, k-1]
+
+    # Reshape back to (B, S, T_eff, k-1)
+    i_local = i_local.view(B, S, T_eff, -1)
+    if S == 1:
+        i_local = i_local.squeeze(1)  # -> (B, T_eff, k-1)
+
+    return i_local
+
+
+@torch.no_grad()
+def tdmi(
+    X: Optional[TensorLikeArray] = None,
+    lags: Union[List[int], torch.Tensor, np.ndarray] = None,
+    *,
+    covmats: Optional[torch.Tensor] = None,
+    T: Optional[int] = None,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    bias_correction: bool = True,
+    return_full: bool = True,
+    precomputed: bool = False,
+) -> Union[Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    """
+    Wrapper function for computing Time-Delayed Mutual Information (TDMI).
+    
+    This function takes raw input data, applies the necessary preprocessing 
+    (stacked lagging and Gaussian copula normalization), and computes the 
+    TDMI using your optimized batch_compute_tdmi_xcorr_torch function.
+    
+    Parameters
+    ----------
+    X : TensorLikeArray, optional
+        Input data which can be:
+        - A single torch.Tensor or np.ndarray with shape (T, N)
+        - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
+        When precomputed=True, X can be None (only covmats needed).
+    lags : array-like
+        Lag values including 0. Must start with 0 (present time).
+        Example: [0, 1, 2, 5] for lags 0, 1, 2, and 5 time steps.
+    covmats : torch.Tensor, optional
+        Pre-computed covariance matrices with shape [B, D, D] where D = N*k.
+        Required when precomputed=True, optional otherwise.
+    T : int, optional
+        Number of time samples in the original data. Required when precomputed=True
+        for proper bias correction computation. When precomputed=False, this is
+        inferred from the input data.
+    device : str, default='cpu'
+        Device for computation
+    dtype : torch.dtype, default=torch.float32
+        Data type for computation
+    bias_correction : bool, default=True
+        Whether to apply bias correction to the TDMI results
+    return_full : bool, default=True
+        Whether to return the full bidirectional TDMI matrix
+    precomputed : bool, default=False
+        If True, assumes covmats are provided and skips data preprocessing.
+        If False, performs full preprocessing from raw data X.
+        
+    Returns
+    -------
+    tdmi : torch.Tensor
+        TDMI values with shape [B, k, N, N] for forward lags
+    xcorr : torch.Tensor
+        Cross-correlation values with shape [B, k, N, N]
+    full_tdmi : torch.Tensor, optional
+        Full bidirectional TDMI matrix with shape [B, N, N, 2*k-1] if return_full=True
+    """
+    from ..commons import gaussian_copula_cov_opt
+    
+    # Minimal argument validation
+    if lags is None:
+        raise ValueError('lags must be provided')
+    
+    lags_tensor = torch.as_tensor(lags, dtype=torch.int32, device=device)
+    if lags_tensor.numel() == 0 or lags_tensor[0].item() != 0:
+        raise ValueError('lags must start with 0 (present time)')
+    
+    k = lags_tensor.numel()
+    
+    def _build_bias(B, N_vars, T_samples):
+        """Helper to build bias correction tensor for TDMI."""
+        if not bias_correction:
+            return 0.0
+        bias_val = gaussian_mi_bias_correction(T_samples)
+        return bias_val
+    
+    # Prepare covmats and bias based on precomputed flag
+    if precomputed:
+        # Use provided covmats
+        if covmats is None:
+            raise ValueError('covmats must be provided when precomputed=True')
+        if T is None:
+            raise ValueError('T (number of time samples) must be provided when precomputed=True')
+        
+        covmats_final = torch.as_tensor(covmats, dtype=dtype, device=device)
+        if covmats_final.dim() == 2:
+            covmats_final = covmats_final.unsqueeze(0)
+        
+        B, D, _ = covmats_final.shape
+        N_vars = D // k
+        T_samples = T
+    else:
+        # Full preprocessing from raw data
+        if X is None:
+            raise ValueError('X must be provided when precomputed=False')
+        
+        # Normalize input to list format for generate_stacked_lagged_batches
+        if isinstance(X, (torch.Tensor, np.ndarray)):
+            if hasattr(X, 'dim') and X.dim() == 2:
+                data_list = [torch.as_tensor(X, dtype=dtype, device=device)]
+            elif isinstance(X, np.ndarray) and X.ndim == 2:
+                data_list = [torch.tensor(X, dtype=dtype, device=device)]
+            else:
+                raise ValueError("Single dataset must have shape (T, N)")
+        elif isinstance(X, (list, tuple)):
+            data_list = [torch.as_tensor(x, dtype=dtype, device=device) for x in X]
+        else:
+            raise ValueError("X must be array-like or list of array-like")
+        
+        # Generate stacked lagged batches
+        lagged_data = generate_stacked_lagged_batches(data_list, lags_tensor)
+        
+        # Apply Gaussian copula normalization to get proper covariance structure
+        normalized_data, covmats_final = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        
+        B, T_samples, D = normalized_data.shape
+        N_vars = D // k
+    
+    # Single call to the optimized TDMI function
+    bias_corr = _build_bias(B, N_vars, T_samples)
+    tdmi_vals, xcorr_vals = batch_compute_tdmi_xcorr_torch(
+        covmats_final,    # cov_batch
+        lags_tensor,      # lags
+        device=device     # device
+    )
+    
+    # Apply bias correction
+    tdmi_vals = tdmi_vals - bias_corr
+    
+    if return_full:
+        # Build full bidirectional TDMI matrix
+        full_tdmi = build_full_tdmi(tdmi_vals)
+        return tdmi_vals, xcorr_vals, full_tdmi
+    else:
+        return tdmi_vals, xcorr_vals
