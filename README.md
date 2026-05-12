@@ -96,24 +96,52 @@ This project is licensed under the MIT License. See the [LICENSE](https://github
 
 ## Citation
 
-If you use the `thoi` library in a scientific project, please cite it using one of the following formats:
+If you use the `thoi` library in a scientific project, please cite:
+
+Belloli L, Mediano PAM, Cofré R, Slezak DF, Herzog R (2026) THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing. PLOS ONE 21(5): e0348005. https://doi.org/10.1371/journal.pone.0348005.
 
 ### BibTeX
 
 ```bibtex
-@article{belloli2025thoi,
-  title={THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing},
-  author={Belloli, Laouen and Mediano, Pedro and Cofr{\'e}, Rodrigo and Slezak, Diego Fernandez and Herzog, Rub{\'e}n},
-  journal={arXiv preprint arXiv:2501.03381},
-  year={2025}
+@article{10.1371/journal.pone.0348005,
+    doi = {10.1371/journal.pone.0348005},
+    author = {Belloli, Laouen AND Mediano, Pedro A. M. AND Cofré, Rodrigo AND Slezak, Diego Fernandez AND Herzog, Rubén},
+    journal = {PLOS ONE},
+    publisher = {Public Library of Science},
+    title = {THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing},
+    year = {2026},
+    month = {05},
+    volume = {21},
+    url = {https://doi.org/10.1371/journal.pone.0348005},
+    pages = {1-23},
+    abstract = {Complex systems are characterized by nonlinear dynamics, multi-level interactions, and emergent collective behaviors. Traditional analyses that focus solely on pairwise interactions often oversimplify these systems, neglecting the higher-order interactions critical for understanding their full collective dynamics. Recent advances in multivariate information theory provide a principled framework for quantifying these higher-order interactions, capturing key properties such as redundancy, synergy, shared randomness, and collective constraints. However, two major challenges persist: accurately estimating joint entropies and addressing the combinatorial explosion of interacting terms. To overcome these challenges, we introduce THOI (Torch-based High-Order Interactions), a novel, accessible, and efficient Python library for computing high-order interactions in continuous-valued systems. THOI leverages the well-established Gaussian copula method for joint entropy estimation, combined with state-of-the-art batch and parallel processing techniques to optimize performance across CPU, GPU, and TPU environments. Our results demonstrate that THOI significantly outperforms existing tools in terms of speed and scalability. Specifically, THOI reduces the time required to exhaustively analyze all interactions in small systems (≤ 30 variables). For larger systems, where exhaustive analysis is computationally impractical, THOI integrates optimization strategies that make higher-order interaction analysis feasible. We validate THOI’s accuracy using synthetic datasets with parametrically controlled interactions and further illustrate its utility by analyzing fMRI data from human subjects in wakeful resting states and under deep anesthesia. Finally, we analyzed over 900 real-world and synthetic datasets, establishing a comprehensive framework for applying higher-order interaction (HOI) analysis in complex systems. THOI opens new perspectives for testing both established and novel hypotheses about the multi-level, nonlinear, and multidimensional nature of complex systems.},
+    number = {5},
+
 }
 ```
 
-**APA**
-Belloli, L., Mediano, P., Cofré, R., Slezak, D. F., & Herzog, R. (2025). THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing. arXiv preprint arXiv:2501.03381.
-
-**MLA**
-Belloli, Laouen, et al. "THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing." arXiv preprint arXiv:2501.03381 (2025).
+**RIS**
+```ris
+TY  - JOUR
+T1  - THOI: An efficient and accessible library for computing higher-order interactions enhanced by batch-processing
+A1  - Belloli, Laouen
+A1  - Mediano, Pedro A. M.
+A1  - Cofré, Rodrigo
+A1  - Slezak, Diego Fernandez
+A1  - Herzog, Rubén
+Y1  - 2026/05/11
+N2  - Complex systems are characterized by nonlinear dynamics, multi-level interactions, and emergent collective behaviors. Traditional analyses that focus solely on pairwise interactions often oversimplify these systems, neglecting the higher-order interactions critical for understanding their full collective dynamics. Recent advances in multivariate information theory provide a principled framework for quantifying these higher-order interactions, capturing key properties such as redundancy, synergy, shared randomness, and collective constraints. However, two major challenges persist: accurately estimating joint entropies and addressing the combinatorial explosion of interacting terms. To overcome these challenges, we introduce THOI (Torch-based High-Order Interactions), a novel, accessible, and efficient Python library for computing high-order interactions in continuous-valued systems. THOI leverages the well-established Gaussian copula method for joint entropy estimation, combined with state-of-the-art batch and parallel processing techniques to optimize performance across CPU, GPU, and TPU environments. Our results demonstrate that THOI significantly outperforms existing tools in terms of speed and scalability. Specifically, THOI reduces the time required to exhaustively analyze all interactions in small systems (≤ 30 variables). For larger systems, where exhaustive analysis is computationally impractical, THOI integrates optimization strategies that make higher-order interaction analysis feasible. We validate THOI’s accuracy using synthetic datasets with parametrically controlled interactions and further illustrate its utility by analyzing fMRI data from human subjects in wakeful resting states and under deep anesthesia. Finally, we analyzed over 900 real-world and synthetic datasets, establishing a comprehensive framework for applying higher-order interaction (HOI) analysis in complex systems. THOI opens new perspectives for testing both established and novel hypotheses about the multi-level, nonlinear, and multidimensional nature of complex systems.
+JF  - PLOS ONE
+JA  - PLOS ONE
+VL  - 21
+IS  - 5
+UR  - https://doi.org/10.1371/journal.pone.0348005
+SP  - e0348005
+EP  - 
+PB  - Public Library of Science
+M3  - doi:10.1371/journal.pone.0348005
+ER  - 
+```
 
 
 ## Authors
