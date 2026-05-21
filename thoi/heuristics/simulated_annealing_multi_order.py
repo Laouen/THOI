@@ -65,6 +65,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
                                     initial_solution: Optional[torch.Tensor] = None,
                                     repeat: int = 10,
                                     batch_size: int = 1000000,
+                                    batch_size_D: Optional[int] = None,
                                     device: torch.device = torch.device('cpu'),
                                     max_iterations: int = 1000,
                                     early_stop: int = 100,
@@ -93,6 +94,9 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
         The number of repetitions to do to obtain different solutions starting from less optimal initial solutions. Default is 10.
     batch_size : int, optional
         The batch size to use for the computation. Default is 1,000,000.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
     device : torch.device, optional
         The device to use for the computation. Default is 'cpu'.
     max_iterations : int, optional
@@ -131,7 +135,7 @@ def simulated_annealing_multi_order(X: Union[np.ndarray, torch.Tensor, List[np.n
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
     
     # Compute current solution
     # |batch_size| x |order|

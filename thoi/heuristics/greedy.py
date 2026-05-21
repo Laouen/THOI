@@ -21,6 +21,7 @@ def greedy(X: TensorLikeArray,
            repeat: int=10,
            batch_size: int=1000000,
            repeat_batch_size: int=1000000,
+           batch_size_D: Optional[int]=None,
            device: torch.device=torch.device('cpu'),
            metric: Union[str,Callable]='o',
            largest: bool=False):
@@ -47,6 +48,9 @@ def greedy(X: TensorLikeArray,
         The batch size to use for the computation. Default is 1,000,000.
     repeat_batch_size : int, optional
         The batch size for repeating the computation. Default is 1,000,000.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
     device : torch.device, optional
         The device to use for the computation. Default is 'cpu'.
     metric : Union[str, Callable], optional
@@ -68,7 +72,7 @@ def greedy(X: TensorLikeArray,
     - The function iterates over the remaining orders to get the best solution for each order.
     """
 
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     # Compute initial solutions
     batch_data_collector = partial(batch_to_tensor, top_k=repeat, metric=metric, largest=largest)

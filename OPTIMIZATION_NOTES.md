@@ -4,7 +4,7 @@ This document describes the optimization improvements made to the Gaussian copul
 
 ## Changes Made
 
-### 1. New Optimized Function: `gaussian_copula_cov_opt`
+### 1. New Optimized Function: `gaussian_copula_covmat`
 
 A new optimized function has been added to `thoi/commons.py` that provides:
 
@@ -16,7 +16,7 @@ A new optimized function has been added to `thoi/commons.py` that provides:
 #### Function Signature
 ```python
 @torch.no_grad()
-def gaussian_copula_cov_opt(
+def gaussian_copula_covmat(
     X: torch.Tensor,
     *,
     correction: int = 1,
@@ -89,5 +89,5 @@ covmats, D, N, T = _normalize_input_data(datasets)
 
 # Direct usage of optimized function
 X_batch = torch.randn(5, 1000, 10)  # 5 datasets
-Xg, covmats = gaussian_copula_cov_opt(X_batch, return_xg=True)
+Xg, covmats = gaussian_copula_covmat(X_batch, return_xg=True)
 ```

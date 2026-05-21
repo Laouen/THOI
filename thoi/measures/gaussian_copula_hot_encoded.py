@@ -194,6 +194,7 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
                                 batch_size: int = 100000,
+                                batch_size_D: Optional[int] = None,
                                 device: torch.device = torch.device('cpu')):
     '''
     Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
@@ -205,12 +206,13 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
     - device (torch.device): The device to use for the computation. Default is 'cpu'.
     - batch_size (int): Batch size for processing n-plets. Default is 100,000.
-    
+    - batch_size_D (int or None): Number of datasets to process per batch during Gaussian copula covariance computation. Reduces peak memory when D is large. Default is None (all datasets at once).
+
     Returns:
     - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
     '''
 
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     if nplets is None:
         # If no nplets, then compute for the entire systems
@@ -247,6 +249,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
                                      covmat_precomputed: bool=False,
                                      T: Optional[int]=None,
                                      batch_size: int = 100000,
+                                     batch_size_D: Optional[int] = None,
                                      device: torch.device = torch.device('cpu'),
                                      num_workers: int = 0,
                                      batch_aggregation: Optional[Callable[[any],any]] = None,
@@ -266,6 +269,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
         - covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
         - T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
         - batch_size (int): Batch size for DataLoader (default: 1000000).
+        - batch_size_D (int or None): Number of datasets to process per batch during Gaussian copula covariance computation. Reduces peak memory when D is large. Default is None (all datasets at once).
         - device (torch.device): The device to use for the computation. Default is 'cpu'.
         - num_workers (int): Number of workers for DataLoader (default: 0).
         - batch_aggregation (Optional[Callable[[any],any]]): Function to aggregate the batched data (default: pd.concat).
@@ -275,7 +279,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
         pd.DataFrame: DataFrame containing computed metrics.
     """
     
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     max_order = N if max_order is None else max_order
 

@@ -22,7 +22,8 @@ class TestNpletsMeasures(unittest.TestCase):
         current_dir = os.path.dirname(__file__)
         file_path = os.path.join(current_dir, 'data','X_random.tsv')
         self.X = pd.read_csv(file_path, sep='\t', header=None).values
-        self.covmat = gaussian_copula_covmat(self.X)
+        _, cov = gaussian_copula_covmat(torch.as_tensor(self.X).unsqueeze(0))
+        self.covmat = cov[0].numpy()
 
         # get precomputed multi order measures
         self.df_true = pd.read_csv(
@@ -69,6 +70,13 @@ class TestNpletsMeasures(unittest.TestCase):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.X, nplets)
                 self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+
+    def test_batch_size_D_does_not_change_result(self):
+        full_nplet = range(self.X.shape[1])
+        nplets = torch.tensor(list(combinations(full_nplet, 3)))
+        res_no_batch = nplets_measures(self.X, nplets)
+        res_batch1   = nplets_measures(self.X, nplets, batch_size_D=1)
+        self.assertTrue(torch.allclose(res_no_batch, res_batch1, rtol=1e-16, atol=1e-12))
     
     def test_nplets_measures_precomputed(self):
         full_nplet = range(self.X.shape[1])

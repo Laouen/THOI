@@ -177,7 +177,8 @@ def nplets_measures(X: Union[TensorLikeArray],
                     T: Optional[Union[int, List[int]]] = None,
                     device: torch.device = torch.device('cpu'),
                     verbose: int = logging.INFO,
-                    batch_size: int = 1000000):
+                    batch_size: int = 1000000,
+                    batch_size_D: Optional[int] = None):
     
     """
     Compute higher-order measures (TC, DTC, O, S) for specified n-plets in the given data matrices X.
@@ -218,6 +219,9 @@ def nplets_measures(X: Union[TensorLikeArray],
 
     batch_size : int, optional
         Batch size for processing n-plets. Default is 1,000,000.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
 
     Returns
     -------
@@ -312,7 +316,7 @@ def nplets_measures(X: Union[TensorLikeArray],
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
     
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
     
     # If nplets is a list of nplets with different orders, then use hot encoding to compute multiorder measures
     if isinstance(nplets, list) and not all([len(nplet) == len(nplets[0]) for nplet in nplets]):
@@ -381,6 +385,7 @@ def multi_order_measures(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
                          batch_size: int = 1000000,
+                         batch_size_D: Optional[int] = None,
                          device: torch.device = torch.device('cpu'),
                          num_workers: int = 0,
                          batch_aggregation: Optional[Callable[[any],any]] = None,
@@ -417,6 +422,9 @@ def multi_order_measures(X: TensorLikeArray,
         If T is None and `covmat_precomputed` is True, bias correction is not applied. Default is None.
     batch_size : int, optional
         Batch size for DataLoader. Default is 1,000,000.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
     device : torch.device, optional
         Device to use for computation. Default is torch.device('cpu').
     num_workers : int, optional
@@ -497,7 +505,7 @@ def multi_order_measures(X: TensorLikeArray,
 
     """
 
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
     
     # For each dataset, precompute the single variable marginal gaussian entropies
     # |D| x |N|
@@ -723,19 +731,19 @@ def local_nplets_measures(
     using the corrected negative log-likelihood approach that ensures theoretical
     consistency (TC ≥ 0) and proper convergence to traditional measures.
     
-    IMPORTANT: Input data must be normalized using gaussian_copula_cov_opt first
+    IMPORTANT: Input data must be normalized using gaussian_copula_covmat first
     to ensure marginal gaussianity required for the Gaussian copula approach.
     
     Parameters
     ----------
     data : torch.Tensor or array-like
         Normalized input data with shape (D, T, N) or (T, N) for single dataset.
-        This should be the output of gaussian_copula_cov_opt (normalized Gaussian data).
+        This should be the output of gaussian_copula_covmat (normalized Gaussian data).
     nplets : torch.Tensor or array-like
         N-plets to analyze, shape (B, K) where B is number of n-plets, K is order
     covmats : torch.Tensor
         Covariance matrices corresponding to the normalized data, shape (D, N, N).
-        This should be the covariance output of gaussian_copula_cov_opt.
+        This should be the covariance output of gaussian_copula_covmat.
     device : str, default='cpu'
         Device for computation
     dtype : torch.dtype, default=torch.float32
@@ -752,7 +760,7 @@ def local_nplets_measures(
     torch.Tensor
         Local measures with shape [B, D, T, 4] where last dimension is (TC, DTC, O, S)
     """
-    # Normalize inputs - data should already be normalized from gaussian_copula_cov_opt
+    # Normalize inputs - data should already be normalized from gaussian_copula_covmat
     if hasattr(data, 'dim') and data.dim()==3:
         D,T,N = data.shape
         X = data.to(device=device, dtype=dtype)
@@ -763,7 +771,7 @@ def local_nplets_measures(
         X = torch.as_tensor(data,device=device,dtype=dtype).unsqueeze(0)
         D,T,N = 1,X.shape[1],X.shape[2]
 
-    # Covmats must be provided (from gaussian_copula_cov_opt)
+    # Covmats must be provided (from gaussian_copula_covmat)
     covmats = torch.as_tensor(covmats,device=device,dtype=dtype)
     if covmats.dim()==2: 
         covmats = covmats.unsqueeze(0)
@@ -898,7 +906,7 @@ def local_multi_order_measures(
         Required when precomputed=True, optional otherwise.
     precomputed : bool, default=False
         If True, assumes X is already normalized data and covmats are provided.
-        If False, performs full preprocessing including gaussian_copula_cov_opt.
+        If False, performs full preprocessing including gaussian_copula_covmat.
         
     Returns
     -------
@@ -906,7 +914,7 @@ def local_multi_order_measures(
         Dictionary with keys as orders and values as tensors [C(N,order), D, T, 4]
         where last dimension is (TC, DTC, O, S)
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
     
     if precomputed:
         # Use provided normalized data and covariance matrices
@@ -934,8 +942,8 @@ def local_multi_order_measures(
         if covmats.shape != (D, N, N):
             raise ValueError(f'covmats shape {covmats.shape} is not compatible with normalized_data shape {normalized_data.shape}')
     else:
-        # Standard preprocessing path: normalize input data using gaussian_copula_cov_opt
-        # Ensure X is in the correct format for gaussian_copula_cov_opt (needs 3D: D, T, N)
+        # Standard preprocessing path: normalize input data using gaussian_copula_covmat
+        # Ensure X is in the correct format for gaussian_copula_covmat (needs 3D: D, T, N)
         if isinstance(X, np.ndarray):
             if X.ndim == 2:
                 # Single dataset: (T, N) -> (1, T, N)
@@ -954,9 +962,9 @@ def local_multi_order_measures(
             if X_tensor.ndim == 2:
                 X_tensor = X_tensor.unsqueeze(0)
         
-        # Normalize input data and get covariance matrices using gaussian_copula_cov_opt
+        # Normalize input data and get covariance matrices using gaussian_copula_covmat
         # This ensures proper Gaussian distributions with the correct covariance structure
-        normalized_data, covmats = gaussian_copula_cov_opt(X_tensor, return_xg=True)
+        normalized_data, covmats = gaussian_copula_covmat(X_tensor, return_xg=True)
         
         # Determine data dimensions
         if hasattr(normalized_data, 'dim') and normalized_data.dim()==3:
@@ -1031,7 +1039,7 @@ def time_averaged_local_measures(
         Required when precomputed=True, optional otherwise.
     precomputed : bool, default=False
         If True, assumes X is already normalized data and covmats are provided.
-        If False, performs full preprocessing including gaussian_copula_cov_opt.
+        If False, performs full preprocessing including gaussian_copula_covmat.
         
     Returns
     -------
@@ -1447,7 +1455,7 @@ def local_ais(
     auc : torch.Tensor  
         Area under curve (integral) over lags with shape [L, T]
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
 
     # Minimal parsing of shifts and validation
     shifts_tensor = torch.as_tensor(shifts, dtype=torch.int32, device=device)
@@ -1494,7 +1502,7 @@ def local_ais(
 
         lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
         # Only compute normalization/covmats if not provided by precomputed branch
-        normalized_data, covmats = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        normalized_data, covmats = gaussian_copula_covmat(lagged_data, return_xg=True)
 
     # Single unified call to the optimized function
     return batch_local_ais_torch(normalized_data, covmats, shifts_tensor, eps=eps, device=device)
@@ -1540,7 +1548,7 @@ def ais(
     ais : torch.Tensor
         AIS values with shape [B, k-1] where k-1 excludes lag 0
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
 
     # Minimal parsing of shifts and validation
     shifts_tensor = torch.as_tensor(shifts, dtype=torch.int32, device=device)
@@ -1603,7 +1611,7 @@ def ais(
             raise ValueError("X must be array-like or list of array-like")
 
         lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
-        normalized_data, covmats = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        normalized_data, covmats = gaussian_copula_covmat(lagged_data, return_xg=True)
         # Prepare bias using actual temporal length if not set by precomputed branch    
         T_samples = normalized_data.shape[1]
         N_vars = lagged_data.shape[2] // k
@@ -1652,7 +1660,7 @@ def ais_subset(
     torch.Tensor
         AIS values with shape [B, k-1] (or [B, S, k-1] if multiple index-sets provided)
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
     if shifts is None:
         raise ValueError('shifts must be provided')
     if idxs is None and covmats is None and X is None:
@@ -1706,7 +1714,7 @@ def ais_subset(
 
             # Generate stacked lagged batches and compute covariance matrices
             lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)
-            normalized_data, covmats_full = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+            normalized_data, covmats_full = gaussian_copula_covmat(lagged_data, return_xg=True)
 
         # If covmats argument provided use it (overrides X)
         if covmats is not None:
@@ -1788,7 +1796,7 @@ def local_ais_subset(
     - a single (T, N) array/tensor or a list of (T, N) arrays -> will be treated
       as B datasets. It will build the lagged stacked representation using
       `generate_stacked_lagged_batches` and normalize it with
-      `gaussian_copula_cov_opt`.
+      `gaussian_copula_covmat`.
 
     Parameters
     ----------
@@ -1809,7 +1817,7 @@ def local_ais_subset(
     torch.Tensor
         Local AIS values with shape [B, S, T, k-1] (or [B, T, k-1] when S==1).
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
 
     # Minimal argument validation
     if shifts is None or idxs is None:
@@ -1863,7 +1871,7 @@ def local_ais_subset(
             raise ValueError('X must be array-like or list of array-like')
 
         lagged_data = generate_stacked_lagged_batches(data_list, shifts_tensor)  # [B, T_eff, k*N]
-        normalized_data, covmats_full = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        normalized_data, covmats_full = gaussian_copula_covmat(lagged_data, return_xg=True)
 
         # covmats argument overrides internal covmats for extraction if provided
         if covmats is not None:
@@ -1980,7 +1988,7 @@ def tdmi(
     full_tdmi : torch.Tensor, optional
         Full bidirectional TDMI matrix with shape [B, N, N, 2*k-1] if return_full=True
     """
-    from ..commons import gaussian_copula_cov_opt
+    from ..commons import gaussian_copula_covmat
     
     # Minimal argument validation
     if lags is None:
@@ -2036,7 +2044,7 @@ def tdmi(
         lagged_data = generate_stacked_lagged_batches(data_list, lags_tensor)
         
         # Apply Gaussian copula normalization to get proper covariance structure
-        normalized_data, covmats_final = gaussian_copula_cov_opt(lagged_data, return_xg=True)
+        normalized_data, covmats_final = gaussian_copula_covmat(lagged_data, return_xg=True)
         
         B, T_samples, D = normalized_data.shape
         N_vars = D // k

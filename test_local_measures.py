@@ -20,7 +20,7 @@ from thoi.measures.gaussian_copula import (
     time_averaged_local_measures,
     local_nplets_measures
 )
-from thoi.commons import gaussian_copula_cov_opt
+from thoi.commons import gaussian_copula_covmat
 
 def test_local_vs_traditional_measures():
     """Test that time-averaged local measures match traditional measures."""
@@ -120,7 +120,7 @@ def test_performance_comparison():
     data = torch.randn(D, T, N)
     
     # Precompute covariance matrices for fair comparison
-    _, covmats = gaussian_copula_cov_opt(data)
+    _, covmats = gaussian_copula_covmat(data)
     
     # Traditional approach
     start = time.time()

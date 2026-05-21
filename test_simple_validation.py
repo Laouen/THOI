@@ -42,8 +42,7 @@ def test_with_thoi_data():
         print("✅ Successfully imported local measures functions")
         
         # Compute covariance matrix
-        covmat = gaussian_copula_covmat(X)
-        covmat_tensor = torch.tensor(covmat, dtype=torch.float64).unsqueeze(0)
+        _, covmat_tensor = gaussian_copula_covmat(torch.as_tensor(X, dtype=torch.float64).unsqueeze(0))
         print(f"Covariance matrix shape: {covmat_tensor.shape}")
         
         # Test local measures for a simple 3-plet

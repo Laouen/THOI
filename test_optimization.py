@@ -1,5 +1,5 @@
 """
-Test script to verify the gaussian_copula_cov_opt implementation
+Test script to verify the gaussian_copula_covmat implementation
 matches the original gaussian_copula_covmat functionality.
 """
 import numpy as np
@@ -10,7 +10,7 @@ import os
 # Add the thoi directory to the path
 sys.path.append(os.path.abspath('.'))
 
-from thoi.commons import gaussian_copula_covmat, gaussian_copula_cov_opt, _normalize_input_data
+from thoi.commons import gaussian_copula_covmat, gaussian_copula_covmat, _normalize_input_data
 
 def test_basic_functionality():
     """Test that the new function produces similar results to the old one."""
@@ -26,7 +26,7 @@ def test_basic_functionality():
     
     # Test new function (single dataset)
     data_tensor = torch.from_numpy(data).unsqueeze(0)  # (1, T, N)
-    _, new_cov = gaussian_copula_cov_opt(data_tensor)
+    _, new_cov = gaussian_copula_covmat(data_tensor)
     new_cov_np = new_cov[0].numpy()
     
     # Compare results
@@ -80,9 +80,9 @@ def test_batch_processing():
     data_batch = torch.randn(D, T, N)
     
     # Test with different batch sizes
-    _, cov1 = gaussian_copula_cov_opt(data_batch, batch_D=1)
-    _, cov2 = gaussian_copula_cov_opt(data_batch, batch_D=2)  
-    _, cov3 = gaussian_copula_cov_opt(data_batch)  # No batching
+    _, cov1 = gaussian_copula_covmat(data_batch, batch_D=1)
+    _, cov2 = gaussian_copula_covmat(data_batch, batch_D=2)  
+    _, cov3 = gaussian_copula_covmat(data_batch)  # No batching
     
     # All should give the same result
     diff12 = torch.max(torch.abs(cov1 - cov2))
@@ -94,7 +94,7 @@ def test_batch_processing():
     return diff12 < 1e-10 and diff13 < 1e-10
 
 if __name__ == "__main__":
-    print("Testing gaussian_copula_cov_opt implementation...")
+    print("Testing gaussian_copula_covmat implementation...")
     print("=" * 50)
     
     print("\n1. Testing basic functionality...")
