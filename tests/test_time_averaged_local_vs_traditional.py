@@ -3,7 +3,6 @@ import pandas as pd
 import torch
 
 from thoi.measures.gaussian_copula import (
-    multi_order_measures,
     time_averaged_local_measures,
 )
 
@@ -22,16 +21,13 @@ def test_time_averaged_local_measures_match_traditional_on_disk_data():
     X = pd.read_csv(file_path, sep="\t", header=None).values
 
     # dimensions of the full dataset
-    T_full, N_full = X.shape
 
     # Work on a small subset: first 3 variables .
     N = 3
-    # T_sub = 10000
     X_sub = X[:, :N]
 
     # Load precomputed ground-truth measures from disk so the test does not
     # depend on the internal implementation of `multi_order_measures`.
-    current_dir = os.path.dirname(__file__)
     truth_file = os.path.join(current_dir, "data", "X_random__multi_order_measures.tsv")
     df_true = pd.read_csv(truth_file, sep="\t")
 
@@ -51,8 +47,8 @@ def test_time_averaged_local_measures_match_traditional_on_disk_data():
     # time-resolved measures, averages them and applies bias correction.
     # Tune parameters to limit RAM usage: small batch_size and moderate time_chunk;
     # use float32 to further reduce peak memory.
-    # Note: the wrapper returns a tuple; the measures for the requested
-    # n-plets are at index 3 (same layout used in notebooks).
+    # Note: the wrapper returns a dict; the measures for order N are accessed with key N.
+    # For N=3, wrapper_res[3] gives the measures for the full 3-plet.
     # Run the wrapper on the same subsampled timeseries with conservative
     # memory settings. Decreasing time_chunk reduces peak memory usage.
     wrapper_res = time_averaged_local_measures(

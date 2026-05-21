@@ -4,8 +4,6 @@ Test local measures using THOI's existing test data.
 
 import torch
 import pandas as pd
-import numpy as np
-import os
 import sys
 from pathlib import Path
 
@@ -32,7 +30,7 @@ def test_with_thoi_data():
     
     # Convert to tensor format for our functions
     X_tensor = torch.tensor(X.T, dtype=torch.float64).unsqueeze(0)  # (1, T, N)
-    D, T, N = X_tensor.shape
+    _, T, N = X_tensor.shape
     print(f"Tensor shape: {X_tensor.shape}")
     
     try:

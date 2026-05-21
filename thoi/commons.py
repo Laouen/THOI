@@ -262,8 +262,8 @@ def _normalize_input_data(X: TensorLikeArray,
             X = [X] if len(X.shape) == 2 else [X[i] for i in range(X.shape[0])]
         except:
             X = [_to_numpy(x) for x in X]
-            assert all([len(x.shape) == 2 for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
-            assert all([x.shape[1] == X[0].shape[1] for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
+            assert all([len(x.shape) == 2 for x in X]), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'
+            assert all([x.shape[1] == X[0].shape[1] for x in X]), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'
 
         # Process each dataset individually if they have different sizes
         # Check if all datasets have the same temporal dimension

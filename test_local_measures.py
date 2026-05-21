@@ -8,9 +8,7 @@ This script validates that:
 """
 
 import torch
-import numpy as np
 import sys
-import os
 from pathlib import Path
 
 # Add the thoi package to path
