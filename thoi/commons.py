@@ -74,10 +74,10 @@ def gaussian_copula_cov_opt(
     X: torch.Tensor,
     *,
     correction: int = 1,
-    batch_D: int | None = None,
+    batch_D: Optional[int] = None,
     return_xg: bool = False,
     in_place: bool = False,
-    out_dtype: torch.dtype | None = None,
+    out_dtype: Optional[torch.dtype] = None,
 ):
     """
     CPU-optimized Gaussian copula covariance computation.

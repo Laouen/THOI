@@ -21,11 +21,6 @@ def _gaussian_entropy_bias_correction(N,T):
     return torch.tensor((N*np.log(2/(T-1)) + np.sum(psiterms))/2)
 
 
-def _gaussian_entropy_bias(N: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
-    """Computes the bias of the entropy estimator for N-dimensional Gaussian with T samples."""
-    return _gaussian_entropy_bias_correction(N, T).to(device=device, dtype=dtype)
-
-
 def _marginal_gaussian_entropies(covmats: torch.Tensor):
     D, N = covmats.shape[:2]
     return _univariate_gaussian_entropy(

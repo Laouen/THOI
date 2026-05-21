@@ -591,18 +591,17 @@ def multi_order_measures(X: TensorLikeArray,
 # LOCAL (TIME-RESOLVED) MEASURES IMPLEMENTATION
 # ============================================================================
 
-def _gaussian_entropy_bias(N: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
-    """Alias for _gaussian_entropy_bias_correction with consistent naming."""
-    from thoi.measures.utils import _gaussian_entropy_bias_correction
-    return _gaussian_entropy_bias_correction(N, T).to(device=device, dtype=dtype)
-
 def gaussian_tc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
     """Bias for TC = sum H(X_i) - H(X_1..X_K)."""
-    return K * _gaussian_entropy_bias(1, T, device, dtype) - _gaussian_entropy_bias(K, T, device, dtype)
+    from thoi.measures.utils import _gaussian_entropy_bias_correction
+    return K * _gaussian_entropy_bias_correction(1, T).to(device=device, dtype=dtype) - \
+           _gaussian_entropy_bias_correction(K, T).to(device=device, dtype=dtype)
 
 def gaussian_dtc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
     """Bias for DTC = sum_i H(X_{-i}) - (K-1) H(X_1..X_K)."""
-    return K * _gaussian_entropy_bias(K - 1, T, device, dtype) - (K - 1) * _gaussian_entropy_bias(K, T, device, dtype)
+    from thoi.measures.utils import _gaussian_entropy_bias_correction
+    return K * _gaussian_entropy_bias_correction(K - 1, T).to(device=device, dtype=dtype) - \
+           (K - 1) * _gaussian_entropy_bias_correction(K, T).to(device=device, dtype=dtype)
 
 def _batched_chol_logdet(S, eps=1e-10):
     """Compute Cholesky decomposition and log determinant for batched matrices."""
@@ -700,7 +699,7 @@ def _leave_one_out_stats(S, Xc, Lj, logdet_j, eps=1e-10):
             # We need to solve for each time point: L @ y = x^T
             Xc_loo_t = Xc_loo.transpose(-1, -2)  # [B, K-1, Lc]
             y = torch.linalg.solve_triangular(L_loo, Xc_loo_t, upper=False)  # [B, K-1, Lc]
-            q_loo = torch.sum(y * y, dim=1)  # [B, Lc] - removed .T which was causing problems
+            q_loo = torch.sum(y * y, dim=1)  # [B, Lc]: sum over K-1 dimension for quadratic form
         except:
             # Fallback to inverse method
             S_loo_inv = torch.inverse(S_loo + eps * torch.eye(K-1, device=S.device, dtype=S.dtype))
@@ -912,7 +911,7 @@ def local_multi_order_measures(
     if precomputed:
         # Use provided normalized data and covariance matrices
         if covmats is None:
-            raise ValueError('covmats must be provided when precomputed=True')
+            raise ValueError('covmats must be provided when precomputed=True because normalized data requires corresponding covariance matrices')
         
         # Ensure X is properly formatted normalized data
         normalized_data = torch.as_tensor(X, dtype=dtype, device=device)
@@ -964,10 +963,8 @@ def local_multi_order_measures(
             D, T, N = normalized_data.shape
         elif isinstance(normalized_data, (list,tuple)):
             T, N = normalized_data[0].shape
-            D = len(normalized_data)
         else:
             T, N = normalized_data.shape
-            D = 1
         
     if max_order is None: 
         max_order = N
@@ -1127,29 +1124,27 @@ def generate_stacked_lagged_batches(data_list: List[torch.Tensor], shifts: torch
 
 @torch.no_grad()
 def batch_local_ais_torch(
-    data_batch: torch.Tensor,   # [L, T, k*N] salida de generate_stacked_lagged_batches
-    cov_batch:  torch.Tensor,   # [L, k*N, k*N] cov por bloque, mismo orden de shifts
-    shifts:     torch.Tensor,   # [k] con shifts; shifts[0] debe ser 0
+    data_batch: torch.Tensor,   # [L, T, k*N] output of generate_stacked_lagged_batches
+    cov_batch:  torch.Tensor,   # [L, k*N, k*N] covariance per block, same order as shifts
+    shifts:     torch.Tensor,   # [k] with shifts; shifts[0] must be 0
     eps: float = 1e-10,
     device: str = 'cpu',
 ):
     """
-    Devuelve:
-      i_local : [L, T, k-1]  nats, local AIS por retardo (excluye shift 0)
-      auc     : [L, T]       nats·lag, integral trapezoidal en shifts[1:]
+    Returns:
+      i_local : [L, T, k-1]  (nats) Local Active Information Storage (AIS) per lag (excluding shift 0)
+      auc     : [L, T]       (nats·lag) Trapezoidal integral over shifts[1:]
     """
     L, T, D = data_batch.shape
     k = shifts.numel()
-    assert D % k == 0, "D debe ser múltiplo de len(shifts)"
+    assert D % k == 0, "D must be a multiple of len(shifts)"
     N = D // k
 
     data_batch = data_batch.to(device)
     cov_batch  = cov_batch.to(device)
-    shifts     = shifts.to(device)
-
     eyeN = torch.eye(N, device=device)
 
-    # --- helpers de bloques (0 = presente, 1..k-1 = pasados según 'shifts')
+    # --- helpers for blocks (0 = present, 1..k-1 = past according to 'shifts')
     def block(i, j):
         return cov_batch[:, i*N:(i+1)*N, j*N:(j+1)*N]  # [L,N,N]
 
@@ -1158,7 +1153,7 @@ def batch_local_ais_torch(
     Sigma_ty = torch.stack([block(0, s) for s in range(1, k)], 1)              # [L,k-1,N,N]
     Sigma_yt = Sigma_ty.transpose(-1, -2)                                       # [L,k-1,N,N]
 
-    # --- Cholesky y logdets
+    # --- Cholesky and logdets
     L_t = torch.linalg.cholesky(Sigma_t)                                        # [L,N,N]
     logdet_t = 2.0 * torch.log(torch.diagonal(L_t, dim1=-2, dim2=-1)).sum(-1)  # [L]
 
@@ -1169,7 +1164,7 @@ def batch_local_ais_torch(
     L_cond = torch.linalg.cholesky(Sigma_cond)                                  # [L,k-1,N,N]
     logdet_cond = 2.0 * torch.log(torch.diagonal(L_cond, dim1=-2, dim2=-1)).sum(-1)  # [L,k-1]
 
-    # --- datos x_t y pasados y_{τ}
+    # --- data x_t and past y_{τ}
     x = data_batch[:, :, :N]                                                    # [L,T,N]
     y = torch.stack([data_batch[:, :, s*N:(s+1)*N] for s in range(1, k)], 2)    # [L,T,k-1,N]
 
@@ -1274,10 +1269,10 @@ def extract_subcov_batch_vec(
         D = cov_full.size(0)
         device = cov_full.device
 
-    # inferir cuántos lags tenemos
-    L = D // N_total  # debe ser entero
+    # infer how many lags we have
+    L = D // N_total  # must be integer
 
-    # offsets de bloque = [0, N_total, 2*N_total, ..., (L-1)*N_total]
+    # block offsets = [0, N_total, 2*N_total, ..., (L-1)*N_total]
     lag_offsets = torch.arange(L, device=device).view(L, 1, 1) * N_total  # (L,1,1)
 
     # para cada subset y cada lag sumamos offset
@@ -1287,12 +1282,12 @@ def extract_subcov_batch_vec(
     # aplanamos a (S, L*g)
     flat = base.permute(1, 0, 2).reshape(S, L * g)  # (S, L*g)
 
-    # construimos índices de filas/columnas (S, L*g, L*g)
+    # construct row/column indices (S, L*g, L*g)
     rows = flat.unsqueeze(2).expand(-1, -1, L * g)
     cols = flat.unsqueeze(1).expand(-1, L * g, -1)
 
     if not batched:
-        # extraemos para single matrix -> (S, L*g, L*g)
+        # extract for single matrix -> (S, L*g, L*g)
         return cov_full[rows, cols]
     else:
         # For batched input, build a batch index to perform elementwise advanced indexing
