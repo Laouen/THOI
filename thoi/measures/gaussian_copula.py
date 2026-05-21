@@ -718,348 +718,276 @@ def _leave_one_out_stats(S, Xc, Lj, logdet_j, eps=1e-10):
 
     return logdet_mi_sum, qmi_sum
 
+
+def _local_nplets_from_xg(Xg, covmats, nplets, *, device, dtype, batch_size, time_chunk, eps):
+    """Core local nplets computation from pre-normalized Gaussian data."""
+    nplets = torch.as_tensor(nplets, device=device, dtype=torch.long).contiguous()
+    B_total, K = nplets.shape
+    D, T, _ = Xg.shape
+
+    out = torch.empty(B_total, D, T, 4, device=device, dtype=dtype)
+
+    for start in range(0, B_total, batch_size):
+        npl = nplets[start:start + batch_size]
+        B = npl.shape[0]
+
+        S = _gather_nplet_covs(covmats, npl)
+        Lj, logdet_j = _batched_chol_logdet(S, eps=eps)
+        var = torch.diagonal(S, dim1=-2, dim2=-1)
+
+        for t0 in range(0, T, time_chunk):
+            t1 = min(T, t0 + time_chunk)
+            Xc = _gather_nplet_data(Xg, npl, t0, t1)
+            Lc = t1 - t0
+
+            qj = _quad_from_chol(Lj, Xc)
+            joint_nll = 0.5 * (K * np.log(2 * np.pi) + logdet_j.unsqueeze(1) + qj)
+
+            q_uni = Xc ** 2 / var.unsqueeze(1)
+            logdet_uni_per_var = torch.log(var)
+            uni_nll = 0.5 * (np.log(2 * np.pi) + logdet_uni_per_var.unsqueeze(1) + q_uni)
+            uni_nll_sum = uni_nll.sum(dim=2)
+
+            tc_loc = uni_nll_sum - joint_nll
+
+            if K >= 3:
+                logdet_mi, qmi = _leave_one_out_stats(S, Xc, Lj, logdet_j, eps)
+                loo_nll = 0.5 * (K * (K - 1) * np.log(2 * np.pi) + logdet_mi.unsqueeze(1) + qmi)
+                dtc_loc = loo_nll - (K - 1) * joint_nll
+                o_loc = tc_loc - dtc_loc
+                s_loc = tc_loc + dtc_loc
+            else:
+                dtc_loc = tc_loc
+                o_loc = torch.zeros_like(tc_loc)
+                s_loc = tc_loc + dtc_loc
+
+            out[start:start + B, :, t0:t1, 0] = tc_loc.view(B, D, Lc)
+            out[start:start + B, :, t0:t1, 1] = dtc_loc.view(B, D, Lc)
+            out[start:start + B, :, t0:t1, 2] = o_loc.view(B, D, Lc)
+            out[start:start + B, :, t0:t1, 3] = s_loc.view(B, D, Lc)
+
+    return out
+
+# Todo: check the handling of already precomputed covariance matrices and the pre normalized data (Xg)
 @torch.no_grad()
 def local_nplets_measures(
-    data, nplets, covmats, *,
+    X, nplets=None, *,
+    covmats: Optional[torch.Tensor] = None,
+    batch_size_D: Optional[int] = None,
     device='cpu', dtype=torch.float32,
     batch_size=100000, time_chunk=2048, eps=1e-10
 ):
     """
     Compute local (time-resolved) higher-order information measures.
-    
+
     This function computes local versions of TC, DTC, O, and S for each time point
     using the corrected negative log-likelihood approach that ensures theoretical
     consistency (TC ≥ 0) and proper convergence to traditional measures.
-    
-    IMPORTANT: Input data must be normalized using gaussian_copula_covmat first
-    to ensure marginal gaussianity required for the Gaussian copula approach.
-    
+
     Parameters
     ----------
-    data : torch.Tensor or array-like
-        Normalized input data with shape (D, T, N) or (T, N) for single dataset.
-        This should be the output of gaussian_copula_covmat (normalized Gaussian data).
-    nplets : torch.Tensor or array-like
-        N-plets to analyze, shape (B, K) where B is number of n-plets, K is order
-    covmats : torch.Tensor
-        Covariance matrices corresponding to the normalized data, shape (D, N, N).
-        This should be the covariance output of gaussian_copula_covmat.
+    X : torch.Tensor or array-like
+        Raw timeseries input data with shape (T, N) or (D, T, N).
+        The Gaussian copula normalization is always applied internally.
+    nplets : torch.Tensor or array-like, optional
+        N-plets to analyze, shape (B, K) where B is number of n-plets, K is order.
+        If None, uses the single full-system n-plet [[0, 1, ..., N-1]].
+    covmats : torch.Tensor, optional
+        Pre-computed covariance matrices with shape (N, N) or (D, N, N).
+        If None, covariance matrices are computed from X via gaussian_copula_covmat.
+        Useful to avoid recomputing when calling this function multiple times on
+        the same data (e.g., for different sets of nplets).
+    batch_size_D : int or None, default=None
+        Number of datasets to process per batch during Gaussian copula computation.
+        Only used when covmats=None. Reduces peak memory when D is large.
     device : str, default='cpu'
-        Device for computation
+        Device for computation.
     dtype : torch.dtype, default=torch.float32
-        Data type for computation
+        Data type for computation.
     batch_size : int, default=100000
-        Batch size for n-plet processing
+        Batch size for n-plet processing.
     time_chunk : int, default=2048
-        Time chunk size for memory optimization
+        Time chunk size for memory optimization.
     eps : float, default=1e-10
-        Numerical stability epsilon
-        
+        Numerical stability epsilon.
+
     Returns
     -------
     torch.Tensor
-        Local measures with shape [B, D, T, 4] where last dimension is (TC, DTC, O, S)
+        Local measures with shape [B, D, T, 4] where last dimension is (TC, DTC, O, S).
     """
-    # Normalize inputs - data should already be normalized from gaussian_copula_covmat
-    if hasattr(data, 'dim') and data.dim()==3:
-        D,T,N = data.shape
-        X = data.to(device=device, dtype=dtype)
-    elif isinstance(data,(list,tuple)):
-        D = len(data); T,N = data[0].shape
-        X = torch.stack([torch.as_tensor(d,device=device,dtype=dtype) for d in data],0)
+    from ..commons import gaussian_copula_covmat as _gcc
+
+    X_tensor = torch.as_tensor(np.array(X) if isinstance(X, (list, tuple)) else X)
+    X_tensor = X_tensor.unsqueeze(0) if X_tensor.ndim == 2 else X_tensor
+
+    if covmats is None:
+        Xg, covmats_t = _gcc(X_tensor, return_xg=True, batch_size_D=batch_size_D)
     else:
-        X = torch.as_tensor(data,device=device,dtype=dtype).unsqueeze(0)
-        D,T,N = 1,X.shape[1],X.shape[2]
+        Xg, _ = _gcc(X_tensor, return_xg=True, batch_size_D=batch_size_D)
+        covmats_t = torch.as_tensor(np.array(covmats) if isinstance(covmats, list) else covmats)
+        covmats_t = covmats_t.unsqueeze(0) if covmats_t.ndim == 2 else covmats_t
 
-    # Covmats must be provided (from gaussian_copula_covmat)
-    covmats = torch.as_tensor(covmats,device=device,dtype=dtype)
-    if covmats.dim()==2: 
-        covmats = covmats.unsqueeze(0)
+    Xg = Xg.to(device=device, dtype=dtype)
+    covmats = covmats_t.to(device=device, dtype=dtype)
+    N = Xg.shape[2]
 
-    nplets = torch.as_tensor(nplets,device=device,dtype=torch.long).contiguous()
-    B_total,K = nplets.shape
+    if nplets is None:
+        nplets = torch.arange(N, device=device).unsqueeze(0)
 
-    out = torch.empty(B_total,D,T,4,device=device,dtype=dtype)
-
-    for start in range(0,B_total,batch_size):
-        npl = nplets[start:start+batch_size]
-        B = npl.shape[0]
-
-        # Gather covariance matrices for this batch of nplets
-        S = _gather_nplet_covs(covmats,npl)          # [B*D,K,K]
-        
-        # Compute Cholesky decomposition and joint log-determinant
-        Lj, logdet_j = _batched_chol_logdet(S,eps=eps)
-        
-        # Get diagonal elements (variances) for univariate calculations
-        var = torch.diagonal(S,dim1=-2,dim2=-1)      # [B*D,K]
-
-        for t0 in range(0,T,time_chunk):
-            t1 = min(T,t0+time_chunk)
-            Xc = _gather_nplet_data(X,npl,t0,t1)     # [B*D,Lc,K]
-            Lc = t1-t0
-
-            # CORRECTED IMPLEMENTATION: Proper negative log-likelihood calculations
-            # Following the validated approach that ensures TC ≥ 0 and convergence
-            
-            # Joint NLL: -log p(x_t) for the full n-plet
-            # NLL = 0.5 * [K*log(2π) + log|Σ| + x_t^T Σ^{-1} x_t]
-            qj = _quad_from_chol(Lj, Xc)                                    # [B*D, Lc]
-            joint_nll = 0.5 * (K * np.log(2 * np.pi) + logdet_j.unsqueeze(1) + qj)  # [B*D, Lc]
-            
-            # Univariate NLLs: -log p(x_i_t) for each variable
-            # For each variable: NLL_i = 0.5 * [log(2π) + log(σ_i²) + (x_i_t)²/σ_i²]
-            q_uni = (Xc**2 / var.unsqueeze(1))                             # [B*D, Lc, K]
-            logdet_uni_per_var = torch.log(var)                            # [B*D, K]
-            uni_nll = 0.5 * (np.log(2 * np.pi) + 
-                           logdet_uni_per_var.unsqueeze(1) + q_uni)        # [B*D, Lc, K]
-            
-            # Sum of univariate NLLs: Σᵢ[-log p(x_i_t)]
-            uni_nll_sum = uni_nll.sum(dim=2)                               # [B*D, Lc]
-            
-            # TC local: Sum of univariate entropies minus joint entropy
-            # TC = H(X₁) + H(X₂) + ... + H(Xₙ) - H(X₁,X₂,...,Xₙ)
-            # Since H = -E[log p] and for local: TC = uni_nll_sum - joint_nll
-            tc_loc = uni_nll_sum - joint_nll                               # [B*D, Lc]
-            
-            # For DTC, O, S: need leave-one-out calculations for K≥3
-            if K >= 3:
-                # Leave-one-out NLLs: -log p(x_{-i}_t) for each subset
-                logdet_mi, qmi = _leave_one_out_stats(S, Xc, Lj, logdet_j, eps)
-                # Correct constant term: K leave-one-out systems, each with (K-1) variables
-                # Total constant: K * (K-1) * log(2π)
-                loo_nll = 0.5 * (K * (K-1) * np.log(2 * np.pi) + 
-                               logdet_mi.unsqueeze(1) + qmi)               # [B*D, Lc]
-                
-                # DTC local: DTC = sum_i H(X_{-i}) - (K-1) H(X)
-                # In terms of NLL: DTC = loo_nll - (K-1) * joint_nll
-                # (previous implementation subtracted only joint_nll, which is incorrect)
-                dtc_loc = loo_nll - (K - 1) * joint_nll                      # [B*D, Lc]
-                
-                # O: TC minus DTC (redundancy)
-                o_loc = tc_loc - dtc_loc                                   # [B*D, Lc]
-                
-                # S: TC plus DTC (synergy)  
-                s_loc = tc_loc + dtc_loc                                   # [B*D, Lc]
-                
-            else:
-                # For K=2, DTC=TC and O=0, S=TC+DTC=2×TC
-                dtc_loc = tc_loc
-                o_loc = torch.zeros_like(tc_loc)
-                s_loc = tc_loc + dtc_loc  # S = TC + DTC = TC + TC = 2×TC
-
-            # Store results in output tensor
-            out[start:start+B,:,t0:t1,0] = tc_loc.view(B,D,Lc)
-            out[start:start+B,:,t0:t1,1] = dtc_loc.view(B,D,Lc)
-            out[start:start+B,:,t0:t1,2] = o_loc.view(B,D,Lc)
-            out[start:start+B,:,t0:t1,3] = s_loc.view(B,D,Lc)
-
-    return out
+    return _local_nplets_from_xg(
+        Xg, covmats, nplets,
+        device=device, dtype=dtype,
+        batch_size=batch_size, time_chunk=time_chunk, eps=eps,
+    )
 
 @torch.no_grad()
 def local_multi_order_measures(
     X: TensorLikeArray,
     min_order: int = 3,
-    max_order: Optional[int] = None, 
-    *, 
-    device: str = 'cpu', 
-    dtype: torch.dtype = torch.float32,
-    batch_size: int = 100000, 
-    time_chunk: int = 4096, 
-    eps: float = 1e-10,
+    max_order: Optional[int] = None,
+    *,
     covmats: Optional[torch.Tensor] = None,
-    precomputed: bool = False
+    batch_size_D: Optional[int] = None,
+    device: str = 'cpu',
+    dtype: torch.dtype = torch.float32,
+    batch_size: int = 100000,
+    time_chunk: int = 4096,
+    eps: float = 1e-10,
 ) -> dict:
     """
     Compute local measures for every order in [min_order, max_order] on the full set of variables.
-    
-    This function provides a wrapper around local_nplets_measures to compute local
-    information theory measures for all possible n-plets of specified orders.
-    
-    IMPORTANT: Input data X must be normalized using normalize_input_data first
-    to ensure marginal gaussianity required for the Gaussian copula approach.
-    
+
     Parameters
     ----------
     X : TensorLikeArray
-        Input data which can be:
-        - A single torch.Tensor or np.ndarray with shape (T, N)
-        - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
-        When precomputed=False: Must be normalized using normalize_input_data first.
-        When precomputed=True: Must be already normalized data with shape (D, T, N).
+        Raw timeseries input data with shape (T, N) or (D, T, N).
     min_order : int, default=3
-        Minimum order of interactions to compute
+        Minimum order of interactions to compute.
     max_order : int, optional
-        Maximum order of interactions to compute. If None, uses N (number of variables)
-    device : str, default='cpu'
-        Device for computation
-    dtype : torch.dtype, default=torch.float32
-        Data type for computation
-    batch_size : int, default=100000
-        Batch size for n-plet processing
-    time_chunk : int, default=4096
-        Time chunk size for memory optimization
-    eps : float, default=1e-10
-        Numerical stability epsilon
+        Maximum order of interactions to compute. If None, uses N (number of variables).
     covmats : torch.Tensor, optional
-        Pre-computed covariance matrices with shape [D, N, N].
-        Required when precomputed=True, optional otherwise.
-    precomputed : bool, default=False
-        If True, assumes X is already normalized data and covmats are provided.
-        If False, performs full preprocessing including gaussian_copula_covmat.
-        
+        Pre-computed covariance matrices with shape (N, N) or (D, N, N).
+        If None, covariance matrices are computed from X via gaussian_copula_covmat.
+        When provided, the Gaussian copula covariance computation is skipped (Xg is still
+        derived from X), which is useful when calling this function repeatedly on the same data.
+    batch_size_D : int or None, default=None
+        Number of datasets to process per batch during Gaussian copula computation.
+        Reduces peak memory when D is large.
+    device : str, default='cpu'
+        Device for computation.
+    dtype : torch.dtype, default=torch.float32
+        Data type for computation.
+    batch_size : int, default=100000
+        Batch size for n-plet processing.
+    time_chunk : int, default=4096
+        Time chunk size for memory optimization.
+    eps : float, default=1e-10
+        Numerical stability epsilon.
+
     Returns
     -------
     dict
         Dictionary with keys as orders and values as tensors [C(N,order), D, T, 4]
-        where last dimension is (TC, DTC, O, S)
+        where last dimension is (TC, DTC, O, S).
     """
-    from ..commons import gaussian_copula_covmat
-    
-    if precomputed:
-        # Use provided normalized data and covariance matrices
-        if covmats is None:
-            raise ValueError('covmats must be provided when precomputed=True because normalized data requires corresponding covariance matrices')
-        
-        # Ensure X is properly formatted normalized data
-        normalized_data = torch.as_tensor(X, dtype=dtype, device=device)
-        if normalized_data.dim() == 2:
-            # Single dataset: (T, N) -> (1, T, N)
-            normalized_data = normalized_data.unsqueeze(0)
-        elif normalized_data.dim() != 3:
-            raise ValueError('When precomputed=True, X must be normalized data with shape (D, T, N) or (T, N)')
-        
-        # Ensure covmats is properly formatted
-        covmats = torch.as_tensor(covmats, dtype=dtype, device=device)
-        if covmats.dim() == 2:
-            # Single covariance matrix: (N, N) -> (1, N, N)
-            covmats = covmats.unsqueeze(0)
-        elif covmats.dim() != 3:
-            raise ValueError('When precomputed=True, covmats must have shape (D, N, N) or (N, N)')
-        
-        # Check compatibility
-        D, T, N = normalized_data.shape
-        if covmats.shape != (D, N, N):
-            raise ValueError(f'covmats shape {covmats.shape} is not compatible with normalized_data shape {normalized_data.shape}')
+    from ..commons import gaussian_copula_covmat as _gcc
+
+    X_tensor = torch.as_tensor(np.array(X) if isinstance(X, (list, tuple)) else X)
+    X_tensor = X_tensor.unsqueeze(0) if X_tensor.ndim == 2 else X_tensor
+
+    Xg, covmats_computed = _gcc(X_tensor, return_xg=True, batch_size_D=batch_size_D)
+    if covmats is None:
+        covmats_t = covmats_computed
     else:
-        # Standard preprocessing path: normalize input data using gaussian_copula_covmat
-        # Ensure X is in the correct format for gaussian_copula_covmat (needs 3D: D, T, N)
-        if isinstance(X, np.ndarray):
-            if X.ndim == 2:
-                # Single dataset: (T, N) -> (1, T, N)
-                X = X[np.newaxis, :, :]
-            X_tensor = torch.tensor(X, dtype=dtype)
-        elif isinstance(X, torch.Tensor):
-            if X.ndim == 2:
-                # Single dataset: (T, N) -> (1, T, N) 
-                X = X.unsqueeze(0)
-            X_tensor = X.to(dtype=dtype)
-        elif isinstance(X, (list, tuple)):
-            # Multiple datasets: [(T, N), ...] -> (D, T, N)
-            X_tensor = torch.stack([torch.tensor(x, dtype=dtype) for x in X])
-        else:
-            X_tensor = torch.tensor(X, dtype=dtype)
-            if X_tensor.ndim == 2:
-                X_tensor = X_tensor.unsqueeze(0)
-        
-        # Normalize input data and get covariance matrices using gaussian_copula_covmat
-        # This ensures proper Gaussian distributions with the correct covariance structure
-        normalized_data, covmats = gaussian_copula_covmat(X_tensor, return_xg=True)
-        
-        # Determine data dimensions
-        if hasattr(normalized_data, 'dim') and normalized_data.dim()==3:
-            D, T, N = normalized_data.shape
-        elif isinstance(normalized_data, (list,tuple)):
-            T, N = normalized_data[0].shape
-        else:
-            T, N = normalized_data.shape
-        
-    if max_order is None: 
+        covmats_t = torch.as_tensor(np.array(covmats) if isinstance(covmats, list) else covmats)
+        covmats_t = covmats_t.unsqueeze(0) if covmats_t.ndim == 2 else covmats_t
+
+    Xg = Xg.to(device=device, dtype=dtype)
+    covmats_t = covmats_t.to(device=device, dtype=dtype)
+    N = Xg.shape[2]
+
+    if max_order is None:
         max_order = N
 
     out = {}
-    for K in range(min_order, max_order+1):
-        # All n-plets of this order: use lexicographic ordering
+    for K in range(min_order, max_order + 1):
         nplets = torch.combinations(torch.arange(N, device=device), r=K, with_replacement=False)
-        local_measures = local_nplets_measures(
-            normalized_data, nplets, covmats, device=device,
-            batch_size=batch_size, time_chunk=time_chunk, eps=eps, dtype=dtype
+        out[K] = _local_nplets_from_xg(
+            Xg, covmats_t, nplets,
+            device=device, dtype=dtype,
+            batch_size=batch_size, time_chunk=time_chunk, eps=eps,
         )
-        out[K] = local_measures
-    
+
     return out
 
 
 def time_averaged_local_measures(
     X: TensorLikeArray,
     min_order: int = 3,
-    max_order: Optional[int] = None, 
-    *, 
-    device: str = 'cpu', 
+    max_order: Optional[int] = None,
+    *,
+    covmats: Optional[torch.Tensor] = None,
+    batch_size_D: Optional[int] = None,
+    device: str = 'cpu',
     dtype: torch.dtype = torch.float32,
-    batch_size: int = 100000, 
-    time_chunk: int = 4096, 
+    batch_size: int = 100000,
+    time_chunk: int = 4096,
     eps: float = 1e-10,
     bias_correction: bool = True,
-    covmats: Optional[torch.Tensor] = None,
-    precomputed: bool = False
 ) -> dict:
     """
     Compute time-averaged local measures with optional bias correction.
-    
+
     This function computes local measures and then averages them over time,
     applying bias correction to the averaged results (not to individual local measures).
-    
+
     Parameters
     ----------
     X : TensorLikeArray
-        Input data which can be:
-        - A single torch.Tensor or np.ndarray with shape (T, N)
-        - A list/sequence of torch.Tensor or np.ndarray each with shape (T, N)
-        When precomputed=False: Must be normalized using normalize_input_data first.
-        When precomputed=True: Must be already normalized data with shape (D, T, N).
+        Raw timeseries input data with shape (T, N) or (D, T, N).
     min_order : int, default=3
-        Minimum order of interactions to compute
+        Minimum order of interactions to compute.
     max_order : int, optional
-        Maximum order of interactions to compute. If None, uses N (number of variables)
-    device : str, default='cpu'
-        Device for computation
-    dtype : torch.dtype, default=torch.float32
-        Data type for computation
-    batch_size : int, default=100000
-        Batch size for n-plet processing  
-    time_chunk : int, default=4096
-        Chunk size for temporal processing
-    eps : float, default=1e-10
-        Small value for numerical stability
-    bias_correction : bool, default=True
-        Whether to apply bias correction after temporal averaging
+        Maximum order of interactions to compute. If None, uses N (number of variables).
     covmats : torch.Tensor, optional
-        Pre-computed covariance matrices with shape [D, N, N].
-        Required when precomputed=True, optional otherwise.
-    precomputed : bool, default=False
-        If True, assumes X is already normalized data and covmats are provided.
-        If False, performs full preprocessing including gaussian_copula_covmat.
-        
+        Pre-computed covariance matrices with shape (N, N) or (D, N, N).
+        If None, covariance matrices are computed from X via gaussian_copula_covmat.
+    batch_size_D : int or None, default=None
+        Number of datasets to process per batch during Gaussian copula computation.
+        Reduces peak memory when D is large.
+    device : str, default='cpu'
+        Device for computation.
+    dtype : torch.dtype, default=torch.float32
+        Data type for computation.
+    batch_size : int, default=100000
+        Batch size for n-plet processing.
+    time_chunk : int, default=4096
+        Chunk size for temporal processing.
+    eps : float, default=1e-10
+        Small value for numerical stability.
+    bias_correction : bool, default=True
+        Whether to apply bias correction after temporal averaging.
+
     Returns
     -------
     dict
         Dictionary mapping order -> tensor of averaged measures with shape
-        (n_combinations, n_samples, 4) where last dim is [TC, DTC, O, S]
+        (n_combinations, n_samples, 4) where last dim is [TC, DTC, O, S].
     """
-    
+
     # First get local measures
     local_results = local_multi_order_measures(
         X,
         min_order=min_order,
         max_order=max_order,
+        covmats=covmats,
+        batch_size_D=batch_size_D,
         device=device,
         dtype=dtype,
         batch_size=batch_size,
         time_chunk=time_chunk,
         eps=eps,
-        covmats=covmats,
-        precomputed=precomputed
     )
 
     # Time-average the results and apply bias correction AFTER temporal averaging
