@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import torch
 
-from thoi.measures.gaussian_copula import (
+from thoi.measures.gaussian_copula_local import (
     time_averaged_local_measures,
 )
 

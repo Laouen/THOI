@@ -1,14 +1,13 @@
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import torch
 
 from thoi.typing import TensorLikeArray
 from thoi.commons import gaussian_copula_covmat
+from thoi.measures.utils import _all_min_1_ids, _get_single_exclusion_covmats
+from thoi.measures.gaussian_copula import _batch_processing_multi_order
 
-# TODO: 
-# 1. check if I don't have to use the same torch Dataset strategy to make it work on GPU as efficiently as in the non local version.
-# 2. re check all tests, make sure they pass and there are no new test cases to consider
 
 def gaussian_tc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
     """Bias for TC = sum H(X_i) - H(X_1..X_K)."""
@@ -16,11 +15,13 @@ def gaussian_tc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float6
     return K * _gaussian_entropy_bias_correction(1, T).to(device=device, dtype=dtype) - \
            _gaussian_entropy_bias_correction(K, T).to(device=device, dtype=dtype)
 
+
 def gaussian_dtc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
     """Bias for DTC = sum_i H(X_{-i}) - (K-1) H(X_1..X_K)."""
     from thoi.measures.utils import _gaussian_entropy_bias_correction
     return K * _gaussian_entropy_bias_correction(K - 1, T).to(device=device, dtype=dtype) - \
            (K - 1) * _gaussian_entropy_bias_correction(K, T).to(device=device, dtype=dtype)
+
 
 def _batched_chol_logdet(S, eps=1e-10):
     """Compute Cholesky decomposition and log determinant for batched matrices."""
@@ -29,11 +30,13 @@ def _batched_chol_logdet(S, eps=1e-10):
     logdet = 2.0*torch.log(torch.diagonal(L, dim1=-2, dim2=-1)).sum(-1)
     return L, logdet  # L:[B,k,k], logdet:[B]
 
+
 def _quad_from_chol(L, X):
     """Compute quadratic form using Cholesky decomposition."""
     # L:[B,k,k], X:[B,Lc,k] -> [B,Lc]
     ZT = torch.cholesky_solve(X.transpose(1,2), L)  # [B,k,Lc]
     return (X.transpose(1,2) * ZT).sum(1)           # [B,Lc]
+
 
 def _gather_nplet_covs(covmats, nplets):
     """Extract covariance submatrices for specified n-plets."""
@@ -45,6 +48,7 @@ def _gather_nplet_covs(covmats, nplets):
     c_idx = nplets[:,None,None,:].expand(B,D,K,K)
     sub = covmats[d_idx, r_idx, c_idx]   # [B,D,K,K]
     return sub.reshape(B*D, K, K)
+
 
 def _gather_nplet_data(data, nplets, t0, t1):
     """Extract data subsets for specified n-plets and time range."""
@@ -59,75 +63,129 @@ def _gather_nplet_data(data, nplets, t0, t1):
     sub = data[d_idx, t_idx, n_idx]  # [B,D,Lc,K]
     return sub.reshape(B*D, Lc, K)
 
-def _leave_one_out_stats(S: torch.Tensor, Xc: torch.Tensor, Lj: torch.Tensor, logdet_j: torch.Tensor, eps: float = 1e-10):
+
+def _leave_one_out_stats(S: torch.Tensor, Xc: torch.Tensor, allmin1: torch.Tensor, eps: float = 1e-10):
     """
-    Compute leave-one-out statistics for DTC calculation.
-    
-    This function computes the sum of all leave-one-out negative log-likelihoods
-    which is needed for DTC and S calculations. Uses direct computation of each
-    leave-one-out subsystem for accuracy.
-    
+    Compute leave-one-out log-determinant sum and quadratic-form sum for DTC.
+
+    Fully vectorized: one batched Cholesky and one batched triangular solve over
+    all B×K leave-one-out subsystems, replacing the previous K-iteration Python loop.
+
     Parameters
     ----------
     S : torch.Tensor
-        Covariance matrices, shape [B, K, K]
-    Xc : torch.Tensor  
-        Data chunk, shape [B, Lc, K]
-    Lj : torch.Tensor
-        Cholesky decomposition of S
-    logdet_j : torch.Tensor
-        Log determinant of S
-        
+        Covariance matrices, shape (B, K, K).
+    Xc : torch.Tensor
+        Data chunk, shape (B, Lc, K).
+    allmin1 : torch.Tensor
+        Leave-one-out index table, shape (K, K-1). Precomputed via _all_min_1_ids(K).
+    eps : float, default=1e-10
+        Regularisation added to the diagonal before Cholesky.
+
     Returns
     -------
-    logdet_mi_sum : torch.Tensor
-        Sum of log determinants for all leave-one-out subsystems, shape [B]
-    qmi_sum : torch.Tensor
-        Sum of quadratic forms for all leave-one-out subsystems, shape [B, Lc]
+    logdet_mi_sum : torch.Tensor  shape (B,)
+        Sum of log|Σ_{-i}| over all K leave-one-out subsystems.
+    qmi_sum : torch.Tensor  shape (B, Lc)
+        Sum of x_{-i}ᵀ Σ_{-i}⁻¹ x_{-i} over all K leave-one-out subsystems.
     """
     B, K, _ = S.shape
     Lc = Xc.shape[1]
-    
-    # Initialize accumulators
-    logdet_mi_sum = torch.zeros(B, device=S.device, dtype=S.dtype)
-    qmi_sum = torch.zeros(B, Lc, device=S.device, dtype=S.dtype)
-    
-    # Compute each leave-one-out subsystem directly
-    for i in range(K):
-        # Indices for leave-one-out (excluding i-th variable)
-        loo_indices = torch.cat([torch.arange(i), torch.arange(i+1, K)])
-        
-        # Extract leave-one-out covariance matrices and data
-        S_loo = S[:, loo_indices][:, :, loo_indices]  # [B, K-1, K-1]
-        Xc_loo = Xc[:, :, loo_indices]                # [B, Lc, K-1]
-        
-        # Use Cholesky decomposition for numerical stability (like traditional THOI)
-        try:
-            L_loo = torch.linalg.cholesky(S_loo + eps * torch.eye(K-1, device=S.device, dtype=S.dtype))
-            logdet_loo = 2 * torch.sum(torch.log(torch.diagonal(L_loo, dim1=-2, dim2=-1)), dim=-1)
-        except:
-            # Fallback to regular logdet if Cholesky fails
-            logdet_loo = torch.logdet(S_loo + eps * torch.eye(K-1, device=S.device, dtype=S.dtype))
-            
-        logdet_mi_sum += logdet_loo
-        
-        # Compute quadratic form using Cholesky solve (more stable than inverse)
-        # Solve L @ y = x for each time point, then compute ||y||^2
-        try:
-            # L_loo: [B, K-1, K-1], Xc_loo: [B, Lc, K-1]
-            # We need to solve for each time point: L @ y = x^T
-            Xc_loo_t = Xc_loo.transpose(-1, -2)  # [B, K-1, Lc]
-            y = torch.linalg.solve_triangular(L_loo, Xc_loo_t, upper=False)  # [B, K-1, Lc]
-            q_loo = torch.sum(y * y, dim=1)  # [B, Lc]: sum over K-1 dimension for quadratic form
-        except:
-            # Fallback to inverse method
-            S_loo_inv = torch.inverse(S_loo + eps * torch.eye(K-1, device=S.device, dtype=S.dtype))
-            temp = torch.bmm(Xc_loo, S_loo_inv)
-            q_loo = torch.sum(temp * Xc_loo, dim=2)  # [B, Lc]
-            
-        qmi_sum += q_loo
+
+    # --- covariance submatrices ---
+    # (B, K, K-1, K-1) then flatten to (B*K, K-1, K-1)
+    S_loo = _get_single_exclusion_covmats(S, allmin1).reshape(B * K, K - 1, K - 1)
+
+    # one batched Cholesky for all B*K subsystems
+    eye = eps * torch.eye(K - 1, device=S.device, dtype=S.dtype)
+    L_loo = torch.linalg.cholesky(S_loo + eye)                            # (B*K, K-1, K-1)
+    logdet_loo = 2 * torch.log(torch.diagonal(L_loo, dim1=-2, dim2=-1)).sum(-1)  # (B*K,)
+    logdet_mi_sum = logdet_loo.view(B, K).sum(dim=1)                      # (B,)
+
+    # --- data subsets ---
+    # Xc[:, :, allmin1] → (B, Lc, K, K-1) → permute → (B, K, Lc, K-1) → (B*K, Lc, K-1)
+    Xc_loo = Xc[:, :, allmin1].permute(0, 2, 1, 3).reshape(B * K, Lc, K - 1)
+
+    # one batched triangular solve for all B*K subsystems
+    y = torch.linalg.solve_triangular(
+        L_loo, Xc_loo.transpose(-1, -2), upper=False
+    )                                                                       # (B*K, K-1, Lc)
+    qmi_sum = (y * y).sum(dim=1).view(B, K, Lc).sum(dim=1)               # (B, Lc)
 
     return logdet_mi_sum, qmi_sum
+
+
+def _local_single_batch_from_xg(
+    Xg: torch.Tensor,
+    covmats: torch.Tensor,
+    nplets: torch.Tensor,
+    *,
+    allmin1: Optional[torch.Tensor],
+    device: torch.device,
+    dtype: torch.dtype,
+    time_chunk: int,
+    eps: float,
+) -> torch.Tensor:
+    """Compute local measures for a single batch of nplets across all time steps.
+
+    Parameters
+    ----------
+    Xg : Tensor[D, T, N]
+        Pre-normalized Gaussian data.
+    covmats : Tensor[D, N, N]
+        Covariance matrices.
+    nplets : Tensor[B, K]
+        One batch of n-plet indices (all same order K).
+    allmin1 : Tensor[K, K-1] or None
+        Leave-one-out index table for order K. None when K < 3.
+
+    Returns
+    -------
+    Tensor[B, D, T, 4]
+        Local measures (TC, DTC, O, S) per n-plet and time point.
+    """
+    B, K = nplets.shape
+    D, T, _ = Xg.shape
+
+    S = _gather_nplet_covs(covmats, nplets)           # [B*D, K, K]
+    Lj, logdet_j = _batched_chol_logdet(S, eps=eps)  # [B*D, K, K], [B*D]
+    var = torch.diagonal(S, dim1=-2, dim2=-1)         # [B*D, K]
+
+    batch_out = torch.empty(B, D, T, 4, device=device, dtype=dtype)
+
+    for t0 in range(0, T, time_chunk):
+        t1 = min(T, t0 + time_chunk)
+        Xc = _gather_nplet_data(Xg, nplets, t0, t1)  # [B*D, Lc, K]
+        Lc = t1 - t0
+
+        qj = _quad_from_chol(Lj, Xc)                  # [B*D, Lc]
+        joint_nll = 0.5 * (K * np.log(2 * np.pi) + logdet_j.unsqueeze(1) + qj)  # [B*D, Lc]
+
+        q_uni = Xc ** 2 / var.unsqueeze(1)             # [B*D, Lc, K]
+        uni_nll_sum = 0.5 * (
+            np.log(2 * np.pi) + torch.log(var).unsqueeze(1) + q_uni
+        ).sum(dim=2)                                   # [B*D, Lc]
+
+        tc_loc = uni_nll_sum - joint_nll               # [B*D, Lc]
+
+        if K >= 3:
+            logdet_mi, qmi = _leave_one_out_stats(S, Xc, allmin1, eps)
+            loo_nll = 0.5 * (K * (K - 1) * np.log(2 * np.pi) + logdet_mi.unsqueeze(1) + qmi)
+            dtc_loc = loo_nll - (K - 1) * joint_nll
+            o_loc = tc_loc - dtc_loc
+            s_loc = tc_loc + dtc_loc
+        else:
+            dtc_loc = tc_loc
+            o_loc = torch.zeros_like(tc_loc)
+            s_loc = tc_loc + dtc_loc
+
+        batch_out[:, :, t0:t1, 0] = tc_loc.view(B, D, Lc)
+        batch_out[:, :, t0:t1, 1] = dtc_loc.view(B, D, Lc)
+        batch_out[:, :, t0:t1, 2] = o_loc.view(B, D, Lc)
+        batch_out[:, :, t0:t1, 3] = s_loc.view(B, D, Lc)
+
+    return batch_out  # [B, D, T, 4]
+
 
 def _local_nplets_from_xg(Xg: torch.Tensor,
                           covmats: torch.Tensor,
@@ -140,51 +198,19 @@ def _local_nplets_from_xg(Xg: torch.Tensor,
                           eps: float) -> torch.Tensor:
     """Core local nplets computation from pre-normalized Gaussian data."""
     nplets = torch.as_tensor(nplets, device=device, dtype=torch.long).contiguous()
-    B_total, K = nplets.shape
-    D, T, _ = Xg.shape
+    K = nplets.shape[1]
+    # Precompute leave-one-out index table once — reused across every batch and time chunk.
+    allmin1 = _all_min_1_ids(K, device=device) if K >= 3 else None  # (K, K-1)
 
-    out = torch.empty(B_total, D, T, 4, device=device, dtype=dtype)
-
-    for start in range(0, B_total, batch_size):
+    results = []
+    for start in range(0, nplets.shape[0], batch_size):
         npl = nplets[start:start + batch_size]
-        B = npl.shape[0]
-
-        S = _gather_nplet_covs(covmats, npl)
-        Lj, logdet_j = _batched_chol_logdet(S, eps=eps)
-        var = torch.diagonal(S, dim1=-2, dim2=-1)
-
-        for t0 in range(0, T, time_chunk):
-            t1 = min(T, t0 + time_chunk)
-            Xc = _gather_nplet_data(Xg, npl, t0, t1)
-            Lc = t1 - t0
-
-            qj = _quad_from_chol(Lj, Xc)
-            joint_nll = 0.5 * (K * np.log(2 * np.pi) + logdet_j.unsqueeze(1) + qj)
-
-            q_uni = Xc ** 2 / var.unsqueeze(1)
-            logdet_uni_per_var = torch.log(var)
-            uni_nll = 0.5 * (np.log(2 * np.pi) + logdet_uni_per_var.unsqueeze(1) + q_uni)
-            uni_nll_sum = uni_nll.sum(dim=2)
-
-            tc_loc = uni_nll_sum - joint_nll
-
-            if K >= 3:
-                logdet_mi, qmi = _leave_one_out_stats(S, Xc, Lj, logdet_j, eps)
-                loo_nll = 0.5 * (K * (K - 1) * np.log(2 * np.pi) + logdet_mi.unsqueeze(1) + qmi)
-                dtc_loc = loo_nll - (K - 1) * joint_nll
-                o_loc = tc_loc - dtc_loc
-                s_loc = tc_loc + dtc_loc
-            else:
-                dtc_loc = tc_loc
-                o_loc = torch.zeros_like(tc_loc)
-                s_loc = tc_loc + dtc_loc
-
-            out[start:start + B, :, t0:t1, 0] = tc_loc.view(B, D, Lc)
-            out[start:start + B, :, t0:t1, 1] = dtc_loc.view(B, D, Lc)
-            out[start:start + B, :, t0:t1, 2] = o_loc.view(B, D, Lc)
-            out[start:start + B, :, t0:t1, 3] = s_loc.view(B, D, Lc)
-
-    return out
+        results.append(_local_single_batch_from_xg(
+            Xg, covmats, npl,
+            allmin1=allmin1, device=device, dtype=dtype,
+            time_chunk=time_chunk, eps=eps,
+        ))
+    return torch.cat(results, dim=0)
 
 @torch.no_grad()
 def local_nplets_measures(X, nplets=None, *,
@@ -278,9 +304,16 @@ def local_multi_order_measures(X: TensorLikeArray,
                                dtype: torch.dtype = torch.float32,
                                batch_size: int = 100000,
                                time_chunk: int = 4096,
-                               eps: float = 1e-10) -> dict:
+                               eps: float = 1e-10,
+                               batch_data_collector: Optional[Callable] = None,
+                               batch_aggregation: Optional[Callable] = None) -> dict:
     """
     Compute local measures for every order in [min_order, max_order] on the full set of variables.
+
+    N-plets are generated lazily via CovarianceDataset + DataLoader (no full materialization),
+    then processed in batches. The result collection and aggregation are controlled by
+    ``batch_data_collector`` and ``batch_aggregation``, following the same architecture as
+    ``multi_order_measures``.
 
     Parameters
     ----------
@@ -312,12 +345,21 @@ def local_multi_order_measures(X: TensorLikeArray,
         Time chunk size for memory optimization.
     eps : float, default=1e-10
         Numerical stability epsilon.
+    batch_data_collector : callable, optional
+        ``(nplets: Tensor[B, K], result: Tensor[B, D, T, 4], bn: int) -> Any``
+        Post-processes each batch result. Defaults to the identity (returns the result tensor).
+        Can be used to write results to disk batch-by-batch to avoid materializing the full output.
+    batch_aggregation : callable, optional
+        ``(items: list[Any]) -> Any``
+        Aggregates all collected items for one order.
+        Defaults to ``torch.cat(items, dim=0)`` → ``Tensor[C(N, order), D, T, 4]``.
 
     Returns
     -------
     dict
-        Dictionary with keys as orders and values as tensors [C(N,order), D, T, 4]
-        where last dimension is (TC, DTC, O, S).
+        ``{order: aggregated_result}`` for each order in [min_order, max_order].
+        With default callbacks the values are ``Tensor[C(N, order), D, T, 4]``
+        where the last dimension is (TC, DTC, O, S).
     """
 
     X_tensor = torch.as_tensor(np.array(X) if isinstance(X, (list, tuple)) else X)
@@ -346,16 +388,27 @@ def local_multi_order_measures(X: TensorLikeArray,
     if max_order is None:
         max_order = N
 
-    out = {}
-    for K in range(min_order, max_order + 1):
-        nplets = torch.combinations(torch.arange(N, device=device), r=K, with_replacement=False)
-        out[K] = _local_nplets_from_xg(
+    # Cache allmin1 per order so it is computed once, not once per batch.
+    _allmin1_cache: dict = {}
+
+    def _batch_fn(nplets, K):
+        if K not in _allmin1_cache:
+            _allmin1_cache[K] = _all_min_1_ids(K, device=device) if K >= 3 else None
+        return _local_single_batch_from_xg(
             Xg, covmats_t, nplets,
+            allmin1=_allmin1_cache[K],
             device=device, dtype=dtype,
-            batch_size=batch_size, time_chunk=time_chunk, eps=eps,
+            time_chunk=time_chunk, eps=eps,
         )
 
-    return out
+    return _batch_processing_multi_order(
+        N=N, min_order=min_order, max_order=max_order,
+        batch_fn=_batch_fn,
+        batch_size=batch_size,
+        device=device,
+        batch_data_collector=batch_data_collector,   # None → identity (return result as-is)
+        batch_aggregation=batch_aggregation,          # None → torch.cat along dim=0
+    )
 
 
 def time_averaged_local_measures(

@@ -35,9 +35,9 @@ def test_with_thoi_data():
     
     try:
         # Test import
-        from thoi.measures.gaussian_copula import (
-            local_nplets_measures, 
-            time_averaged_local_measures
+        from thoi.measures.gaussian_copula_local import (
+            local_nplets_measures,
+            time_averaged_local_measures,
         )
         print("✅ Successfully imported local measures functions")
         

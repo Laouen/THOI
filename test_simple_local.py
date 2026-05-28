@@ -19,7 +19,7 @@ def simple_test():
     data = torch.randn(D, T, N)
     
     try:
-        from thoi.measures.gaussian_copula import local_nplets_measures
+        from thoi.measures.gaussian_copula_local import local_nplets_measures
         print("✅ Successfully imported local_nplets_measures")
         
         # Test with a simple 3-plet
@@ -34,7 +34,7 @@ def simple_test():
         print(f"   TC range: [{result[0,0,:,0].min():.6f}, {result[0,0,:,0].max():.6f}]")
         
         # Test multi-order version
-        from thoi.measures.gaussian_copula import local_multi_order_measures
+        from thoi.measures.gaussian_copula_local import local_multi_order_measures
         print("✅ Successfully imported local_multi_order_measures")
         
         multi_result = local_multi_order_measures(
@@ -46,7 +46,7 @@ def simple_test():
         print(f"   Order 3 shape: {multi_result[3].shape}")
         
         # Test time averaging
-        from thoi.measures.gaussian_copula import time_averaged_local_measures
+        from thoi.measures.gaussian_copula_local import time_averaged_local_measures
         print("✅ Successfully imported time_averaged_local_measures")
         
         avg_result = time_averaged_local_measures(

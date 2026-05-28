@@ -14,11 +14,11 @@ from pathlib import Path
 # Add the thoi package to path
 sys.path.insert(0, str(Path(__file__).parent / 'thoi'))
 
-from thoi.measures.gaussian_copula import (
-    multi_order_measures, 
-    local_multi_order_measures, 
+from thoi.measures.gaussian_copula import multi_order_measures
+from thoi.measures.gaussian_copula_local import (
+    local_multi_order_measures,
     time_averaged_local_measures,
-    local_nplets_measures
+    local_nplets_measures,
 )
 from thoi.commons import gaussian_copula_covmat
 

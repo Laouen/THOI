@@ -21,8 +21,6 @@ from thoi.measures.utils import _all_min_1_ids, \
                                 _marginal_gaussian_entropies, \
                                 _gaussian_entropy_bias_correction, \
                                 _get_single_exclusion_covmats
-# TODO: 
-# 1. rename all_minus_1 to leave_one_out or similar, as it is more intuitive
 
 def _indices_to_hot_encoded(nplets_idxs, N):
     """
@@ -379,6 +377,76 @@ def nplets_measures(X: Union[TensorLikeArray],
     # Concatenate all results
     return torch.cat(results, dim=0)
 
+
+def _batch_processing_multi_order(
+    N: int,
+    min_order: int,
+    max_order: int,
+    batch_fn: Callable,
+    batch_size: int,
+    device: torch.device,
+    num_workers: int = 0,
+    batch_data_collector: Optional[Callable] = None,
+    batch_aggregation: Optional[Callable] = None,
+) -> dict:
+    """Shared batch iteration engine for multi-order n-plet measures.
+
+    For each order K in [min_order, max_order], lazily generates all C(N, K)
+    n-plets via CovarianceDataset + DataLoader, then for each batch:
+      1. calls ``batch_fn(nplets_batch, K)`` → batch_result
+      2. calls ``batch_data_collector(nplets_batch, batch_result, batch_number)`` → item
+      3. collects all items and calls ``batch_aggregation(items)`` → order_result
+
+    Parameters
+    ----------
+    N : int
+        Total number of variables.
+    min_order, max_order : int
+        Inclusive range of orders to process.
+    batch_fn : callable
+        ``(nplets: Tensor[B, K], K: int) -> Any`` — core computation per n-plet batch.
+    batch_size : int
+        Maximum number of n-plets per DataLoader batch.
+    device : torch.device
+        Device on which n-plet index tensors are generated.
+    num_workers : int, default 0
+        DataLoader worker count.
+    batch_data_collector : callable, optional
+        ``(nplets: Tensor[B, K], batch_result: Any, bn: int) -> Any``
+        Post-processes each batch result. Defaults to the identity.
+    batch_aggregation : callable, optional
+        ``(items: list[Any]) -> Any``
+        Aggregates all collected items for one order.
+        Defaults to ``torch.cat(items, dim=0)``.
+
+    Returns
+    -------
+    dict
+        ``{K: aggregated_result}`` for each order K in [min_order, max_order].
+    """
+    out = {}
+    for K in tqdm(range(min_order, max_order + 1), leave=False, desc='Order',
+                  disable=(min_order == max_order)):
+        dataset = CovarianceDataset(N, K, device=device)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=min(batch_size, len(dataset)),
+            shuffle=False,
+            num_workers=num_workers,
+        )
+        collected = []
+        for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader),
+                                         leave=False, desc='Batch')):
+            nplets = nplets.to(device)
+            batch_result = batch_fn(nplets, K)
+            item = batch_data_collector(nplets, batch_result, bn) \
+                if batch_data_collector is not None else batch_result
+            collected.append(item)
+        out[K] = batch_aggregation(collected) \
+            if batch_aggregation is not None else torch.cat(collected, dim=0)
+    return out
+
+
 @torch.no_grad()
 def multi_order_measures(X: TensorLikeArray,
                          min_order: int=3,
@@ -508,7 +576,7 @@ def multi_order_measures(X: TensorLikeArray,
     """
 
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
-    
+
     # For each dataset, precompute the single variable marginal gaussian entropies
     # |D| x |N|
     marginal_entropies = _marginal_gaussian_entropies(covmats)
@@ -517,84 +585,66 @@ def multi_order_measures(X: TensorLikeArray,
 
     if batch_aggregation is None:
         batch_aggregation = concat_and_sort_csv
-
     if batch_data_collector is None:
         batch_data_collector = partial(batch_to_csv, N=N)
 
     assert max_order <= N, f"max_order must be lower or equal than N. {max_order} > {N})"
     assert min_order <= max_order, f"min_order must be lower or equal than max_order. {min_order} > {max_order}"
 
-    # Ensure that final batch_size is smaller than the original batch_size 
+    # Ensure that final batch_size is smaller than the original batch_size
     batch_size = max(batch_size // D, 1)
 
-    # To compute using pytorch, we need to compute each order separately
-    batched_data = []
-    for order in tqdm(range(min_order, max_order+1), leave=False, desc='Order', disable=(min_order==max_order)):
+    # Cache order-specific constants so they are computed once per order, not once per batch.
+    _order_cache: dict = {}
 
-        # Calculate constant values valid for all n-plets of the current order
-        # |N| x |N-1|
-        allmin1 = _all_min_1_ids(order, device=device)
-        
-        # Create the bias corrector for the current order
-        # |batch_size x D|, |batch_size x D|, |batch_size x D|
-        bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
+    def _batch_fn(nplets, K):
+        curr_B = nplets.shape[0]
+        if K not in _order_cache:
+            _order_cache[K] = (
+                _all_min_1_ids(K, device=device),
+                _get_bias_correctors(T, K, batch_size, D, device),
+            )
+        allmin1, (bc1, bcN, bcNmin1) = _order_cache[K]
 
-        # Generate dataset iterable
-        dataset = CovarianceDataset(N, order, device=device)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=min(batch_size, len(dataset)),
-            shuffle=False,
-            num_workers=num_workers
+        # |curr_B| x |D| x |K| x |K|  →  |curr_B*D| x |K| x |K|
+        nplets_covmats = _generate_nplets_covmants(covmats, nplets).view(curr_B * D, K, K)
+        # |curr_B| x |D| x |K|  →  |curr_B*D| x |K|
+        nplets_marginal = _generate_nplets_marginal_entropies(marginal_entropies, nplets).view(curr_B * D, K)
+
+        tc, dtc, o, s = _get_tc_dtc_from_batched_covmat(
+            nplets_covmats, allmin1,
+            bc1[:curr_B * D], bcN[:curr_B * D], bcNmin1[:curr_B * D],
+            nplets_marginal,
+        )
+        # Return stacked Tensor[B, D, 4] so the collector can unpack uniformly.
+        return torch.stack([
+            tc.view(curr_B, D), dtc.view(curr_B, D),
+            o.view(curr_B, D),  s.view(curr_B, D),
+        ], dim=-1)
+
+    def _internal_collector(nplets, result, bn):
+        # Adapt internal (nplets, Tensor[B, D, 4], bn) to the public 6-arg signature.
+        return batch_data_collector(
+            nplets,
+            result[:, :, 0], result[:, :, 1],
+            result[:, :, 2], result[:, :, 3],
+            bn,
         )
 
-        # calculate measurments for each batch
-        for bn, nplets in enumerate(tqdm(dataloader, total=len(dataloader), leave=False, desc='Batch')):
-            # Batch_size can vary in the last batch, then effective batch size is the current batch size
-            curr_batch_size = nplets.shape[0]
+    per_order = _batch_processing_multi_order(
+        N=N, min_order=min_order, max_order=max_order,
+        batch_fn=_batch_fn,
+        batch_size=batch_size,
+        device=device,
+        num_workers=num_workers,
+        batch_data_collector=_internal_collector,
+        batch_aggregation=lambda items: items,  # no per-order aggregation
+    )
 
-            # Send nplets to the device in case it is not there
-            # |curr_batch_size| x |order|
-            nplets = nplets.to(device)
-
-            # Create the covariance matrices for each nplet in the batch
-            # |curr_batch_size| x |D| x |order| x |order|
-            nplets_covmats = _generate_nplets_covmants(covmats, nplets)
-            
-            # Create the marginal entropies sampling from the marginal_entropies tensor
-            # |curr_batch_size| x |D| x |order|
-            nplets_marginal_entropies = _generate_nplets_marginal_entropies(marginal_entropies, nplets)
-
-            # Pack covmats and marginal entropies in a single batch
-            # |curr_batch_size x D| x |N| x |N|
-            nplets_covmats = nplets_covmats.view(curr_batch_size*D, order, order)
-            nplets_marginal_entropies = nplets_marginal_entropies.view(curr_batch_size*D, order)
-
-            # Batch process all nplets at once
-            measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
-                                                       allmin1,
-                                                       bc1[:curr_batch_size*D],
-                                                       bcN[:curr_batch_size*D],
-                                                       bcNmin1[:curr_batch_size*D],
-                                                       nplets_marginal_entropies)
-
-            # Unpack results
-            # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
-            nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
-
-            # Collect batch data
-            data = batch_data_collector(nplets,
-                                        nplets_tc.view(curr_batch_size, D),
-                                        nplets_dtc.view(curr_batch_size, D),
-                                        nplets_o.view(curr_batch_size, D),
-                                        nplets_s.view(curr_batch_size, D),
-                                        bn)
-
-            # Append to batched data
-            batched_data.append(data)
-
-    # Aggregate all data
-    return batch_aggregation(batched_data)
+    # Flatten per-order lists into a single list in the same order as before,
+    # then apply the public batch_aggregation once (identical semantics to the original).
+    all_items = [item for items_for_order in per_order.values() for item in items_for_order]
+    return batch_aggregation(all_items)
 
 
 # ============================================================================
