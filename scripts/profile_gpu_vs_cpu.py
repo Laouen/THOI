@@ -18,8 +18,9 @@ TYPICAL BOTTLENECKS FOR SMALL-TO-MEDIUM PROBLEMS ON GPU:
   small tensors the launch cost (~5–10 µs) dominates actual compute.
 - CPU↔GPU data transfers: moving tensors to/from GPU (e.g., nplets from
   DataLoader, results back to CPU for DataFrame) is expensive.
-- DataLoader on CPU: the CovarianceDataset + DataLoader generates n-plet
-  indices on CPU; transferring each batch to GPU adds latency.
+- DataLoader overhead: CovarianceDataset creates tensors directly on device,
+  but itertools.combinations is Python-side and torch.tensor() per element
+  adds overhead. With num_workers>0, workers can only produce CPU tensors.
 - Collector overhead: the default batch_to_csv builds a pandas DataFrame
   per batch, forcing a GPU→CPU sync + Python object creation.
 - torch.logdet on small matrices: for order=3–5, the matrices are tiny
@@ -172,11 +173,16 @@ def stage_breakdown(N=10, T=500, min_order=3, max_order=None, batch_size=50000):
         with timer("B. Marginal entropies"):
             marginal_ents = _marginal_gaussian_entropies(covmats)
 
-        # Stage C: Generate n-plet indices (always on CPU, then transfer)
-        nplet_list = list(combinations(range(N), order))
-        nplets_cpu = torch.tensor(nplet_list, dtype=torch.long)
-        with timer("C. Transfer nplets to device"):
-            nplets = nplets_cpu.to(device)
+        # Stage C: Generate n-plet indices via CovarianceDataset (as the real code does)
+        # Note: CovarianceDataset creates tensors directly on the target device.
+        # The overhead here is Python-side itertools.combinations + per-element
+        # torch.tensor() calls, NOT a CPU→GPU bulk transfer.
+        from thoi.dataset import CovarianceDataset
+        from torch.utils.data import DataLoader
+        with timer("C. DataLoader nplet generation (on device)"):
+            dataset = CovarianceDataset(N, order, device=device)
+            loader = DataLoader(dataset, batch_size=len(dataset))
+            nplets = next(iter(loader))
 
         # Stage D: Extract n-plet covariance submatrices
         with timer("D. Gather nplet covmats"):
