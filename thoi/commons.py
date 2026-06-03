@@ -67,7 +67,7 @@ def gaussian_copula_covmat(
     assert 0 < batch_size_D <= D, f"batch_size_D must be in (0, {D}] or None"
     
     if out_dtype is None:
-        out_dtype = X.dtype
+        out_dtype = X.dtype if X.dtype.is_floating_point else torch.get_default_dtype()
 
     # Output tensors
     cov_out = torch.empty((D, N, N), dtype=out_dtype, device=X.device)
