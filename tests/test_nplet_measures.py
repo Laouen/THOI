@@ -13,6 +13,42 @@ from thoi.measures.gaussian_copula import nplets_measures
 from thoi.measures.gaussian_copula_hot_encoded import nplets_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
 
+
+class TestGaussianOInformationFormula(unittest.TestCase):
+
+    def test_precision_formula_matches_entropy_definition(self):
+        rng = np.random.default_rng(0)
+
+        for n in [3, 5, 10, 20]:
+            with self.subTest(n=n):
+                a = rng.normal(size=(n, n))
+                cov = a @ a.T + np.eye(n) * 0.5
+                precision = np.linalg.inv(cov)
+                logdet_cov = np.linalg.slogdet(cov)[1]
+
+                fast_o = 0.5 * (
+                    np.log(np.diag(cov)).sum()
+                    - np.log(np.diag(precision)).sum()
+                    - 2.0 * logdet_cov
+                )
+
+                def entropy(subcov):
+                    k = subcov.shape[0]
+                    return 0.5 * (k * np.log(2.0 * np.pi * np.e) + np.linalg.slogdet(subcov)[1])
+
+                marginal_sum = sum(entropy(cov[np.ix_([i], [i])]) for i in range(n))
+                joint_entropy = entropy(cov)
+                exclusion_sum = sum(
+                    entropy(cov[np.ix_([j for j in range(n) if j != i],
+                                       [j for j in range(n) if j != i])])
+                    for i in range(n)
+                )
+                tc = marginal_sum - joint_entropy
+                dtc = exclusion_sum - (n - 1) * joint_entropy
+
+                self.assertAlmostEqual(fast_o, tc - dtc, places=12)
+
+
 # TODO: make this test for all combinations of devices in [cpu, gpu] and different input types
 class TestNpletsMeasures(unittest.TestCase):
 
@@ -85,6 +121,60 @@ class TestNpletsMeasures(unittest.TestCase):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0])
                 self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+
+    def test_nplets_measures_mode_only_o_timeseries_matches_full_estimator(self):
+        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 4))[:12])
+
+        full = nplets_measures(self.X, nplets, batch_size=5)
+        only_o = nplets_measures(self.X, nplets, batch_size=5, mode='only_o')
+
+        self.assertTrue(torch.allclose(only_o[:, :, 2], full[:, :, 2], rtol=1e-6, atol=1e-6))
+        self.assertTrue(torch.isnan(only_o[:, :, [0, 1, 3]]).all())
+
+    def test_nplets_measures_mode_only_o_precomputed_matches_full_estimator(self):
+        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 5))[:10])
+
+        full = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], batch_size=4)
+        only_o = nplets_measures(
+            self.covmat,
+            nplets,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=4,
+            mode='only_o',
+        )
+
+        self.assertTrue(torch.allclose(only_o[:, :, 2], full[:, :, 2], rtol=1e-6, atol=1e-6))
+        self.assertTrue(torch.isnan(only_o[:, :, [0, 1, 3]]).all())
+
+    def test_nplets_measures_mode_fast_timeseries_matches_full_estimator(self):
+        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 4))[:12])
+
+        full = nplets_measures(self.X, nplets, batch_size=5)
+        fast = nplets_measures(self.X, nplets, batch_size=5, mode='fast')
+
+        self.assertTrue(torch.allclose(fast, full, rtol=1e-6, atol=1e-6))
+
+    def test_nplets_measures_mode_fast_precomputed_matches_full_estimator(self):
+        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 5))[:10])
+
+        full = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], batch_size=4)
+        fast = nplets_measures(
+            self.covmat,
+            nplets,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=4,
+            mode='fast',
+        )
+
+        self.assertTrue(torch.allclose(fast, full, rtol=1e-6, atol=1e-6))
+
+    def test_nplets_measures_rejects_invalid_mode(self):
+        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 3))[:2])
+
+        with self.assertRaisesRegex(ValueError, "mode must be one of"):
+            nplets_measures(self.X, nplets, mode='compact')
     
     def test_multiple_times_same_datasets_timeseries(self):
         full_nplet = range(self.X.shape[1])

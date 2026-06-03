@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 import pandas as pd
 import os
+import time
 
 import torch
 
@@ -69,6 +70,146 @@ class TestMultiOrderMeasures(unittest.TestCase):
     def test_multiorder_measures_precomputed_covmat(self):
         df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0])
         self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
+
+    def test_multiorder_measures_mode_only_o_matches_full_estimator(self):
+        full = multi_order_measures(self.X, min_order=3, max_order=5, batch_size=17)
+        only_o = multi_order_measures(self.X, min_order=3, max_order=5, batch_size=17, mode='only_o')
+
+        full = self._as_sorted_dataframe(full)
+        only_o = self._as_sorted_dataframe(only_o)
+
+        np.testing.assert_allclose(only_o['o'].values, full['o'].values, rtol=1e-6, atol=1e-6)
+        self.assertTrue(only_o[['tc', 'dtc', 's']].isna().all().all())
+
+    def test_multiorder_measures_mode_only_o_precomputed_matches_full_estimator(self):
+        full = multi_order_measures(
+            self.covmat,
+            min_order=3,
+            max_order=5,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=19,
+        )
+        only_o = multi_order_measures(
+            self.covmat,
+            min_order=3,
+            max_order=5,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=19,
+            mode='only_o',
+        )
+
+        full = self._as_sorted_dataframe(full)
+        only_o = self._as_sorted_dataframe(only_o)
+
+        np.testing.assert_allclose(only_o['o'].values, full['o'].values, rtol=1e-6, atol=1e-6)
+        self.assertTrue(only_o[['tc', 'dtc', 's']].isna().all().all())
+
+    def test_multiorder_measures_mode_fast_matches_full_estimator(self):
+        full = multi_order_measures(self.X, min_order=3, max_order=5, batch_size=17)
+        fast = multi_order_measures(self.X, min_order=3, max_order=5, batch_size=17, mode='fast')
+
+        full = self._as_sorted_dataframe(full)
+        fast = self._as_sorted_dataframe(fast)
+
+        np.testing.assert_allclose(
+            fast[['tc', 'dtc', 'o', 's']].values,
+            full[['tc', 'dtc', 'o', 's']].values,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+    def test_multiorder_measures_mode_fast_precomputed_matches_full_estimator(self):
+        full = multi_order_measures(
+            self.covmat,
+            min_order=3,
+            max_order=5,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=19,
+        )
+        fast = multi_order_measures(
+            self.covmat,
+            min_order=3,
+            max_order=5,
+            covmat_precomputed=True,
+            T=self.X.shape[0],
+            batch_size=19,
+            mode='fast',
+        )
+
+        full = self._as_sorted_dataframe(full)
+        fast = self._as_sorted_dataframe(fast)
+
+        np.testing.assert_allclose(
+            fast[['tc', 'dtc', 'o', 's']].values,
+            full[['tc', 'dtc', 'o', 's']].values,
+            rtol=1e-6,
+            atol=1e-6,
+        )
+
+    def test_multiorder_measures_rejects_invalid_mode(self):
+        with self.assertRaisesRegex(ValueError, "mode must be one of"):
+            multi_order_measures(self.X, min_order=3, max_order=4, mode='compact')
+
+    @unittest.skipUnless(os.environ.get('THOI_RUN_FAST_O_BENCH') == '1',
+                         'set THOI_RUN_FAST_O_BENCH=1 to run the D=20, N=10 timing comparison')
+    def test_multiorder_measures_only_o_d20_n10_benchmark(self):
+        rng = np.random.default_rng(0)
+        d = 20
+        n = 10
+        t = 500
+        a = rng.normal(size=(d, n, n))
+        cov = a @ np.swapaxes(a, -1, -2) + np.eye(n)[None, :, :] * 0.5
+
+        start = time.perf_counter()
+        full = multi_order_measures(
+            cov,
+            min_order=3,
+            max_order=n,
+            covmat_precomputed=True,
+            T=t,
+        )
+        full_seconds = time.perf_counter() - start
+
+        start = time.perf_counter()
+        only_o = multi_order_measures(
+            cov,
+            min_order=3,
+            max_order=n,
+            covmat_precomputed=True,
+            T=t,
+            mode='only_o',
+        )
+        only_o_seconds = time.perf_counter() - start
+
+        start = time.perf_counter()
+        compact = multi_order_measures(
+            cov,
+            min_order=3,
+            max_order=n,
+            covmat_precomputed=True,
+            T=t,
+            mode='fast',
+        )
+        compact_seconds = time.perf_counter() - start
+
+        full = self._as_sorted_dataframe(full)
+        only_o = self._as_sorted_dataframe(only_o)
+        compact = self._as_sorted_dataframe(compact)
+        print(
+            f'D=20, N=10 multi_order_measures: full={full_seconds:.6f}s, '
+            f'only_o={only_o_seconds:.6f}s, only_o_speedup={full_seconds / only_o_seconds:.2f}x, '
+            f'fast={compact_seconds:.6f}s, fast_speedup={full_seconds / compact_seconds:.2f}x'
+        )
+        np.testing.assert_allclose(only_o['o'].values, full['o'].values, rtol=1e-5, atol=5e-5)
+        np.testing.assert_allclose(
+            compact[['tc', 'dtc', 'o', 's']].values,
+            full[['tc', 'dtc', 'o', 's']].values,
+            rtol=1e-5,
+            atol=5e-5,
+        )
 
     def test_multiorder_measures_timeseries_hot_encoded(self):
         df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000)

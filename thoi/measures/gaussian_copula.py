@@ -22,6 +22,15 @@ from thoi.measures.utils import _all_min_1_ids, \
                                 _gaussian_entropy_bias_correction, \
                                 _get_single_exclusion_covmats
 
+_VALID_GAUSSIAN_MODES = ('full', 'fast', 'only_o')
+
+
+def _validate_gaussian_mode(mode: str) -> str:
+    if mode not in _VALID_GAUSSIAN_MODES:
+        valid_modes = ', '.join(repr(valid_mode) for valid_mode in _VALID_GAUSSIAN_MODES)
+        raise ValueError(f"mode must be one of {valid_modes}; got {mode!r}")
+    return mode
+
 def _indices_to_hot_encoded(nplets_idxs, N):
     """
     Converts a list of index lists to a multi-hot encoded tensor using one_hot and masking.
@@ -169,6 +178,68 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
 
     return nplet_tc, nplet_dtc, nplet_o, nplet_s
 
+
+def _get_fast_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
+                                         order: int,
+                                         bc1: torch.Tensor,
+                                         bcN: torch.Tensor,
+                                         bcNmin1: torch.Tensor):
+    """
+    Compute Gaussian TC, DTC, O, and S from covariance and precision matrices.
+
+    This is algebraically equivalent to the entropy-based estimator, but avoids
+    the single-exclusion entropy calculations required by the full path.
+    """
+
+    chol = torch.linalg.cholesky(covmats)
+    diag_cov = torch.diagonal(covmats, dim1=-2, dim2=-1)
+    eye = torch.eye(order, dtype=covmats.dtype, device=covmats.device)
+    eye = eye.expand(covmats.shape[0], order, order)
+    inv_chol = torch.linalg.solve_triangular(chol, eye, upper=False)
+    diag_precision = (inv_chol * inv_chol).sum(dim=1)
+    logdet_cov = 2.0 * torch.log(torch.diagonal(chol, dim1=-2, dim2=-1)).sum(dim=1)
+
+    nplet_tc = 0.5 * (torch.log(diag_cov).sum(dim=1) - logdet_cov)
+    nplet_tc += bcN - order * bc1
+
+    nplet_dtc = 0.5 * (logdet_cov + torch.log(diag_precision).sum(dim=1))
+    nplet_dtc += (order - 1) * bcN - order * bcNmin1
+
+    nplet_o = nplet_tc - nplet_dtc
+    nplet_s = nplet_tc + nplet_dtc
+
+    return nplet_tc, nplet_dtc, nplet_o, nplet_s
+
+
+def _get_o_from_batched_covmat(covmats: torch.Tensor,
+                               order: int,
+                               bc1: torch.Tensor,
+                               bcN: torch.Tensor,
+                               bcNmin1: torch.Tensor):
+    """
+    Compute only Gaussian O-information from covariance and precision matrices.
+
+    This keeps the only_o path cheaper than the full fast path by avoiding TC and
+    DTC materialization.
+    """
+
+    chol = torch.linalg.cholesky(covmats)
+    diag_cov = torch.diagonal(covmats, dim1=-2, dim2=-1)
+    eye = torch.eye(order, dtype=covmats.dtype, device=covmats.device)
+    eye = eye.expand(covmats.shape[0], order, order)
+    inv_chol = torch.linalg.solve_triangular(chol, eye, upper=False)
+    diag_precision = (inv_chol * inv_chol).sum(dim=1)
+    logdet_cov = 2.0 * torch.log(torch.diagonal(chol, dim1=-2, dim2=-1)).sum(dim=1)
+
+    nplet_o = 0.5 * (
+        torch.log(diag_cov).sum(dim=1)
+        - torch.log(diag_precision).sum(dim=1)
+        - 2.0 * logdet_cov
+    )
+    nplet_o += -order * bc1 + order * bcNmin1 - (order - 2) * bcN
+
+    return nplet_o
+
 @torch.no_grad()
 def nplets_measures(X: Union[TensorLikeArray],
                     nplets: Optional[TensorLikeArray] = None,
@@ -178,7 +249,8 @@ def nplets_measures(X: Union[TensorLikeArray],
                     device: torch.device = torch.device('cpu'),
                     verbose: int = logging.INFO,
                     batch_size: int = 1000000,
-                    batch_size_D: Optional[int] = None):
+                    batch_size_D: Optional[int] = None,
+                    mode: str = 'full'):
     
     """
     Compute higher-order measures (TC, DTC, O, S) for specified n-plets in the given data matrices X.
@@ -222,6 +294,13 @@ def nplets_measures(X: Union[TensorLikeArray],
     batch_size_D : int or None, optional
         Number of datasets to process per batch during Gaussian copula covariance computation.
         Reduces peak memory when D is large. Default is None (all datasets at once).
+    mode : {'full', 'fast', 'only_o'}, optional
+        Computation mode. ``'full'`` uses the standard entropy-based estimator.
+        ``'fast'`` uses compact Gaussian covariance/precision formulas to compute TC and DTC,
+        then computes O and S from their difference and sum. ``'only_o'`` computes only
+        O-information with the direct Gaussian precision-matrix estimator; the returned tensor
+        keeps the standard `(tc, dtc, o, s)` layout with `tc`, `dtc`, and `s` filled with NaN.
+        Default is ``'full'``.
 
     Returns
     -------
@@ -315,11 +394,16 @@ def nplets_measures(X: Union[TensorLikeArray],
         level=verbose,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
+    mode = _validate_gaussian_mode(mode)
+    is_only_o = mode == 'only_o'
+    is_fast = mode == 'fast'
     
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
     
     # If nplets is a list of nplets with different orders, then use hot encoding to compute multiorder measures
     if isinstance(nplets, list) and not all([len(nplet) == len(nplets[0]) for nplet in nplets]):
+        if mode != 'full':
+            raise NotImplementedError(f"mode={mode!r} is not implemented for mixed-order nplets lists")
         logging.warning('Using hot encoding to compute multi-order measures as nplets have different orders')
         nplets = _indices_to_hot_encoded(nplets, N)
         return nplets_measures_hot_encoded(covmats, nplets, covmat_precomputed=True, T=T)
@@ -335,7 +419,7 @@ def nplets_measures(X: Union[TensorLikeArray],
 
     # Create marginal indexes
     # |N| x |N-1|
-    allmin1 = _all_min_1_ids(order, device=device)
+    allmin1 = None if mode != 'full' else _all_min_1_ids(order, device=device)
 
     # Create bias corrector values
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
@@ -356,16 +440,37 @@ def nplets_measures(X: Union[TensorLikeArray],
         # |curr_batch_size x D| x |order| x |order|
         nplets_covmats = nplets_covmats.view(curr_batch_size * D, order, order)
 
-        # Batch process all nplets at once
-        measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
-                                                   allmin1,
-                                                   bc1[:curr_batch_size * D],
-                                                   bcN[:curr_batch_size * D],
-                                                   bcNmin1[:curr_batch_size * D])
+        if is_only_o:
+            nplets_o = _get_o_from_batched_covmat(
+                nplets_covmats,
+                order,
+                bc1[:curr_batch_size * D],
+                bcN[:curr_batch_size * D],
+                bcNmin1[:curr_batch_size * D],
+            )
+            nplets_tc = torch.full_like(nplets_o, torch.nan)
+            nplets_dtc = torch.full_like(nplets_o, torch.nan)
+            nplets_s = torch.full_like(nplets_o, torch.nan)
+        elif is_fast:
+            measures = _get_fast_tc_dtc_from_batched_covmat(
+                nplets_covmats,
+                order,
+                bc1[:curr_batch_size * D],
+                bcN[:curr_batch_size * D],
+                bcNmin1[:curr_batch_size * D],
+            )
+            nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
+        else:
+            # Batch process all nplets at once
+            measures = _get_tc_dtc_from_batched_covmat(nplets_covmats,
+                                                       allmin1,
+                                                       bc1[:curr_batch_size * D],
+                                                       bcN[:curr_batch_size * D],
+                                                       bcNmin1[:curr_batch_size * D])
 
-        # Unpack results
-        # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
-        nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
+            # Unpack results
+            # |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|, |curr_batch_size x D|
+            nplets_tc, nplets_dtc, nplets_o, nplets_s = measures
 
         # Collect results
         results.append(torch.stack([nplets_tc.view(curr_batch_size, D),
@@ -458,7 +563,8 @@ def multi_order_measures(X: TensorLikeArray,
                          device: torch.device = torch.device('cpu'),
                          num_workers: int = 0,
                          batch_aggregation: Optional[Callable[[any],any]] = None,
-                         batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None):
+                         batch_data_collector: Optional[Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],any]] = None,
+                         mode: str = 'full'):
     """
     Compute multi-order measures (TC, DTC, O, S) for the given data matrix X.
 
@@ -515,6 +621,13 @@ def multi_order_measures(X: TensorLikeArray,
             - batch_number: int, the current batch number
         The output of `batch_data_collector` must be compatible with the input expected by `batch_aggregation`.
         By default, it uses `batch_to_csv`, which collects data into CSV. For more information see :ref:`collectors__batch_to_csv`
+    mode : {'full', 'fast', 'only_o'}, optional
+        Computation mode. ``'full'`` uses the standard entropy-based estimator.
+        ``'fast'`` uses compact Gaussian covariance/precision formulas to compute TC and DTC,
+        then computes O and S from their difference and sum. ``'only_o'`` computes only
+        O-information with the direct Gaussian precision-matrix estimator; collectors receive
+        the standard `(tc, dtc, o, s)` tensors with `tc`, `dtc`, and `s` filled with NaN.
+        Default is ``'full'``.
 
     Returns
     -------
@@ -574,11 +687,15 @@ def multi_order_measures(X: TensorLikeArray,
 
     """
 
+    mode = _validate_gaussian_mode(mode)
+    is_only_o = mode == 'only_o'
+    is_fast = mode == 'fast'
+
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     # For each dataset, precompute the single variable marginal gaussian entropies
     # |D| x |N|
-    marginal_entropies = _marginal_gaussian_entropies(covmats)
+    marginal_entropies = None if mode != 'full' else _marginal_gaussian_entropies(covmats)
 
     max_order = N if max_order is None else max_order
 
@@ -599,22 +716,43 @@ def multi_order_measures(X: TensorLikeArray,
     def _batch_fn(nplets, K):
         curr_B = nplets.shape[0]
         if K not in _order_cache:
+            allmin1 = None if mode != 'full' else _all_min_1_ids(K, device=device)
             _order_cache[K] = (
-                _all_min_1_ids(K, device=device),
+                allmin1,
                 _get_bias_correctors(T, K, batch_size, D, device, covmats.dtype),
             )
         allmin1, (bc1, bcN, bcNmin1) = _order_cache[K]
 
         # |curr_B| x |D| x |K| x |K|  →  |curr_B*D| x |K| x |K|
         nplets_covmats = _generate_nplets_covmats(covmats, nplets).view(curr_B * D, K, K)
-        # |curr_B| x |D| x |K|  →  |curr_B*D| x |K|
-        nplets_marginal = _generate_nplets_marginal_entropies(marginal_entropies, nplets).view(curr_B * D, K)
+        if is_only_o:
+            o = _get_o_from_batched_covmat(
+                nplets_covmats,
+                K,
+                bc1[:curr_B * D],
+                bcN[:curr_B * D],
+                bcNmin1[:curr_B * D],
+            )
+            tc = torch.full_like(o, torch.nan)
+            dtc = torch.full_like(o, torch.nan)
+            s = torch.full_like(o, torch.nan)
+        elif is_fast:
+            tc, dtc, o, s = _get_fast_tc_dtc_from_batched_covmat(
+                nplets_covmats,
+                K,
+                bc1[:curr_B * D],
+                bcN[:curr_B * D],
+                bcNmin1[:curr_B * D],
+            )
+        else:
+            # |curr_B| x |D| x |K|  →  |curr_B*D| x |K|
+            nplets_marginal = _generate_nplets_marginal_entropies(marginal_entropies, nplets).view(curr_B * D, K)
 
-        tc, dtc, o, s = _get_tc_dtc_from_batched_covmat(
-            nplets_covmats, allmin1,
-            bc1[:curr_B * D], bcN[:curr_B * D], bcNmin1[:curr_B * D],
-            nplets_marginal,
-        )
+            tc, dtc, o, s = _get_tc_dtc_from_batched_covmat(
+                nplets_covmats, allmin1,
+                bc1[:curr_B * D], bcN[:curr_B * D], bcNmin1[:curr_B * D],
+                nplets_marginal,
+            )
         # Return stacked Tensor[B, D, 4] so the collector can unpack uniformly.
         return torch.stack([
             tc.view(curr_B, D), dtc.view(curr_B, D),
