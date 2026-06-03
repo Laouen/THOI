@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 
+import torch
+
 from thoi.measures.gaussian_copula import multi_order_measures
 from thoi.measures.gaussian_copula_hot_encoded import multi_order_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
@@ -18,7 +20,8 @@ class TestMultiOrderMeasures(unittest.TestCase):
         current_dir = os.path.dirname(__file__)
         file_path = os.path.join(current_dir, 'data','X_random.tsv')
         self.X = pd.read_csv(file_path, sep='\t', header=None).values
-        self.covmat = gaussian_copula_covmat(self.X)
+        _, cov = gaussian_copula_covmat(torch.as_tensor(self.X).unsqueeze(0))
+        self.covmat = cov[0].numpy()
 
         # get precomputed multi order measures
         self.df_true = pd.read_csv(
@@ -56,6 +59,12 @@ class TestMultiOrderMeasures(unittest.TestCase):
     def test_multiorder_measures_timeseries(self):
         df_res = multi_order_measures(self.X)
         self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
+
+    def test_batch_size_D_does_not_change_result(self):
+        df_res_no_batch = multi_order_measures(self.X)
+        df_res_batch1   = multi_order_measures(self.X, batch_size_D=1)
+        self._compare_with_ground_truth(df_res_no_batch, rtol=1e-16, atol=1e-12)
+        self._compare_with_ground_truth(df_res_batch1,   rtol=1e-16, atol=1e-12)
         
     def test_multiorder_measures_precomputed_covmat(self):
         df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0])

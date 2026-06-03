@@ -1,6 +1,6 @@
 from typing import List, Union, Optional
+import warnings
 import numpy as np
-import scipy as sp
 import torch
 
 from thoi.typing import TensorLikeArray
@@ -21,81 +21,121 @@ def _get_string_metric(batched_res: np.ndarray, metric:str):
     # |batch_size|
     return batched_res[:,:,metric_idx].mean(axis=1)
 
-def gaussian_copula(X: np.ndarray):
+@torch.no_grad()
+def gaussian_copula_covmat(
+    X: torch.Tensor,
+    *,
+    correction: int = 1,
+    batch_size_D: Optional[int] = None,
+    return_xg: bool = False,
+    in_place: bool = False,
+    out_dtype: Optional[torch.dtype] = None):
     """
-    .. _gaussian_copula:
+    CPU-optimized Gaussian copula covariance computation.
+    Equivalent to monolithic version when batch_size_D >= D.
     
-    Gaussian Copula Transformation
-    ==============================
-    
-    Transform the data into a Gaussian copula and compute the covariance matrix.
-
     Parameters
     ----------
-    X : np.ndarray
-        A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
+    X : torch.Tensor
+        Input data with shape (D, T, N) where D is number of datasets,
+        T is time points, N is number of variables. Can be CPU or CUDA.
+    correction : int, default=1
+        Bias correction for covariance (0 or 1).
+    batch_size_D : int or None, default=None
+        Batch size for processing D dimension. If None or >= D, processes all at once.
+    return_xg : bool, default=False
+        Whether to return Gaussian-transformed data.
+    in_place : bool, default=False
+        Whether to modify input tensor in place (when possible).
+    out_dtype : torch.dtype or None, default=None
+        Output data type. If None, uses input dtype.
 
     Returns
     -------
-    X_gaussian : np.ndarray
-        The data transformed into the Gaussian copula (same shape as the input).
-    X_gaussian_covmat : np.ndarray
-        The covariance matrix of the Gaussian copula transformed data.
-
-    Notes
-    -----
-    - The Gaussian copula transformation involves ranking the data, normalizing the ranks, and applying the inverse CDF of the standard normal distribution.
-    - Infinite values resulting from the inverse CDF transformation are set to 0.
-    - The covariance matrix is computed from the Gaussian copula transformed data.
+    Xg_out : torch.Tensor or None
+        Gaussian-transformed data if return_xg=True, else None.
+    cov_out : torch.Tensor
+        Covariance matrices with shape (D, N, N).
     """
 
-    assert X.ndim == 2, f'data must be 2D but got {X.ndim}D data input'
+    assert correction in (0, 1), f"correction must be 0 or 1, got {correction}"
+    assert X.ndim == 3, f"expected 3D, got {X.ndim}D"
+    
+    D, T, N = X.shape
+    batch_size_D = batch_size_D if batch_size_D is not None else D
+    
+    assert 0 < batch_size_D <= D, f"batch_size_D must be in (0, {D}] or None"
+    
+    if out_dtype is None:
+        out_dtype = X.dtype if X.dtype.is_floating_point else torch.get_default_dtype()
 
-    T = X.shape[0]
+    # Output tensors
+    cov_out = torch.empty((D, N, N), dtype=out_dtype, device=X.device)
+    Xg_out  = torch.empty_like(X, dtype=out_dtype) if return_xg else None
 
-    # Step 1 & 2: Rank the data and normalize the ranks
-    sortid = np.argsort(X, axis=0) # sorting indices
-    copdata = np.argsort(sortid, axis=0) # sorting sorting indices
-    copdata = (copdata+1)/(T+1) # normalized indices in the [0,1] range 
+    finfo = torch.finfo(out_dtype)
+    lo = float(finfo.tiny)
+    hi = float(1.0 - finfo.eps)
+    denom = float(T - correction)
 
-    # Step 3: Apply the inverse CDF of the standard normal distribution
-    X_gaussian = sp.special.ndtri(copdata) #uniform data to gaussian
+    # Reuse single work buffer to avoid allocator churn
+    if not in_place:
+        work_buf = torch.empty((min(batch_size_D, D), T, N), dtype=out_dtype, device=X.device)
+    else:
+        work_buf = None  # work on input views
 
-    # Handle infinite values by setting them to 0 (optional and depends on use case)
-    X_gaussian[np.isinf(X_gaussian)] = 0
+    # Stable argsort if version supports it; default without stable (faster on CPU)
+    def _argsort(t, dim):
+        try:
+            return torch.argsort(t, dim=dim, stable=False)
+        except TypeError:
+            return torch.argsort(t, dim=dim)
 
-    # Step 4: Compute the covariance matrix
-    X_gaussian_covmat = np.cov(X_gaussian.T)
+    # Process in batches of D
+    for s in range(0, D, batch_size_D):
+        e  = min(s + batch_size_D, D)
+        Db = e - s
+        Xb = X[s:e]  # (Db,T,N)
 
-    return X_gaussian, X_gaussian_covmat
+        # Buffer: copy once per batch if not in_place; if in_place and dtype matches, operate directly
+        if in_place:
+            if Xb.dtype != out_dtype:
+                warnings.warn(
+                    f"in_place=True but X.dtype ({Xb.dtype}) != out_dtype ({out_dtype}); "
+                    "dtype conversion requires a copy — input will not be modified in place.",
+                    UserWarning, stacklevel=2
+                )
+            buf = Xb if Xb.dtype == out_dtype else Xb.to(out_dtype)
+        else:
+            buf = work_buf[:Db]
+            if Xb.dtype == out_dtype:
+                buf.copy_(Xb)
+            else:
+                # conversion + copy in one step
+                buf.copy_(Xb.to(out_dtype))
 
-def gaussian_copula_covmat(X: np.ndarray):
-    """
-    Compute the covariance matrix of the Gaussian copula transformed data.
+        # ranks = argsort(argsort) along time dimension
+        sortid = _argsort(buf, dim=1)
+        ranks  = _argsort(sortid, dim=1).to(out_dtype)  # (Db,T,N)
 
-    Parameters
-    ----------
-    X : np.ndarray
-        A 2D numpy array of shape (T, N) where T is the number of samples and N is the number of variables.
+        # buf := U = (ranks+1)/(T+1), exact clamp, ndtri in-place
+        buf.copy_(ranks).add_(1.0).div_(T + 1.0)
+        buf.clamp_(min=lo, max=hi)
+        torch.special.ndtri(buf, out=buf)  # now buf = Xg
 
-    Returns
-    -------
-    np.ndarray
-        The covariance matrix of the Gaussian copula transformed data.
+        # Temporal centering and batched covariance
+        buf.sub_(buf.mean(dim=1, keepdim=True))
+        cov = torch.bmm(buf.transpose(1, 2), buf).div_(denom)  # (Db,N,N)
 
-    Notes
-    -----
-    - This function is a wrapper around `gaussian_copula` to directly return the covariance matrix. For more details, see :ref:`gaussian_copula`.
-    """
-    return gaussian_copula(X)[1]
+        cov_out[s:e] = cov
+        if return_xg:
+            Xg_out[s:e] = buf
 
-def _to_numpy(X):
-    if isinstance(X, torch.Tensor):
-        # If the tensor is on a GPU/TPU, move it to CPU first, then convert to NumPy
-        return X.detach().cpu().numpy()
-    elif isinstance(X, np.ndarray):
-        return X
-    return np.array(X)
+        # Free temporaries to reduce GC pressure on CPU
+        del sortid, ranks, cov
+        # 'buf' is view of reusable buffer or input; not freed
+
+    return Xg_out, cov_out
 
 def _get_device(use_cpu:bool=False):
     """Set the use of GPU if available"""
@@ -106,7 +146,8 @@ def _get_device(use_cpu:bool=False):
 def _normalize_input_data(X: TensorLikeArray,
                          covmat_precomputed: bool=False,
                          T: Optional[Union[int, List[int]]]=None,
-                         device: torch.device=torch.device('cpu')):
+                         device: torch.device=torch.device('cpu'),
+                         batch_size_D: Optional[int]=None):
     """
     Normalize the input data to be a list of covariance matrices with shape (D, N, N).
 
@@ -122,6 +163,9 @@ def _normalize_input_data(X: TensorLikeArray,
         A list of integers indicating the number of samples for each multivariate series. Default is None.
     device : torch.device, optional
         The device to use for the computation. Default is 'cpu'.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
 
     Returns
     -------
@@ -143,23 +187,30 @@ def _normalize_input_data(X: TensorLikeArray,
 
     # Handle different options for X parameter. Accept multivariate data or covariance matrix
     if covmat_precomputed:
-        covmats = torch.as_tensor(X)
+        covmats = torch.as_tensor(np.array(X) if isinstance(X, list) else X)
         covmats = covmats.unsqueeze(0) if len(covmats.shape) == 2 else covmats
         assert covmats.shape[-2] == covmats.shape[-1], 'Covariance matrix should be square'
         assert len(covmats.shape) == 3, 'Covariance matrix should have dimensions (N, N) or (D, N, N)'
     else:
-        
         try:
-            X = _to_numpy(X)
-            assert len(X.shape) in [2, 3], 'Covariance matrix should have dimensions (T, N) or (D, T, N)'
-            X = [X] if len(X.shape) == 2 else [X[i] for i in range(X.shape[0])]
-        except:
-            X = [_to_numpy(x) for x in X]
-            assert all([len(x.shape) == 2 for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
-            assert all([x.shape[1] == X[0].shape[1] for x in X]), 'All multivariate series should have dimensions (T, N) where T my vary and N be constant across all series'
+            X_tensor = torch.as_tensor(np.array(X) if isinstance(X, (list, tuple)) else X)
+            assert X_tensor.ndim in [2, 3], 'Data should have dimensions (T, N) or (D, T, N)'
+            X_tensor = X_tensor.unsqueeze(0) if X_tensor.ndim == 2 else X_tensor
+            T = [X_tensor.shape[1]] * X_tensor.shape[0]
+            _, covmats = gaussian_copula_covmat(X_tensor, return_xg=False, batch_size_D=batch_size_D)
+        except Exception:
+            X_list = [torch.as_tensor(x) for x in X]
+            assert all(x.ndim == 2 for x in X_list), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'
+            assert all(x.shape[1] == X_list[0].shape[1] for x in X_list), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'
+            T = [x.shape[0] for x in X_list]
 
-        covmats = torch.stack([torch.from_numpy(gaussian_copula_covmat(x)) for x in X])
-        T = [x.shape[0] for x in X]
+            if all(x.shape[0] == X_list[0].shape[0] for x in X_list):
+                _, covmats = gaussian_copula_covmat(torch.stack(X_list), return_xg=False, batch_size_D=batch_size_D)
+            else:
+                covmats = torch.stack([
+                    gaussian_copula_covmat(x.unsqueeze(0), return_xg=False, batch_size_D=batch_size_D)[1][0]
+                    for x in X_list
+                ])
 
     D, N = covmats.shape[:2]
     

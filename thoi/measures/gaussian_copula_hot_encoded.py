@@ -19,7 +19,7 @@ from thoi.measures.constants import GAUS_ENTR_NORMAL
 from thoi.commons import _normalize_input_data
 
 
-def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
+def _generate_nplets_covmats(covmats: torch.Tensor, nplets: torch.Tensor):
 
     # Ensure nplets is a float tensor
     # |batch_size| x |N|
@@ -54,9 +54,8 @@ def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     return nplets_covmat
 
 
-def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_size: int, N: int, D: int, device: torch.device):
-    
-    
+def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_size: int, N: int, D: int, device: torch.device, dtype: torch.dtype):
+
     # Compute bias corrector if from sampled data (T is not None)
     if T is not None:
         assert len(T) == D, 'T must have the same length as the number of datasets'
@@ -64,11 +63,11 @@ def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_siz
         bias_correctors = torch.tensor([
             [_gaussian_entropy_bias_correction(order,t) for t in T]
             for order in range(1,N+1)
-        ], device=device)
+        ], device=device, dtype=dtype)
 
     else:
         # |N| x |D|
-        bias_correctors = torch.zeros((N,D), device=device)
+        bias_correctors = torch.zeros((N,D), device=device, dtype=dtype)
 
     # |batch_size x D|
     bc1 = bias_correctors[0].repeat(batch_size)
@@ -91,7 +90,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
     Parameters:
     - covmats (torch.Tensor): The covariance matrices with shape (batch_size*D, N, N)
     - nplets (torch.Tensor): The nplets to compute the measures with shape (batch_size, N)
-    - orders (torch.Tensor): The order of each bached covmant (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
+    - orders (torch.Tensor): The order of each batched covmat (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
     - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (N, N-1)
     - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size*D)
     - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size*D)
@@ -157,11 +156,11 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
 
     # Create bias corrector values
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
-    bc1, bcN, bcNmin1 = _get_bias_correctors(T, orders, batch_size, N, D, device)
+    bc1, bcN, bcNmin1 = _get_bias_correctors(T, orders, batch_size, N, D, device, covmats.dtype)
 
     # Create the covariance matrices for each nplet in the batch
     # |batch_size| x |D| x |N| x |N|
-    nplets_covmat = _generate_nplets_covmants(covmats, nplets)
+    nplets_covmat = _generate_nplets_covmats(covmats, nplets)
 
     # Pack covmats in a single batch
     # |batch_size x D| x |N| x |N|
@@ -194,6 +193,7 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
                                 covmat_precomputed: bool = False,
                                 T: Optional[int] = None,
                                 batch_size: int = 100000,
+                                batch_size_D: Optional[int] = None,
                                 device: torch.device = torch.device('cpu')):
     '''
     Brief: Compute the higher order measurements (tc, dtc, o and s) for the given data matrices X over the nplets.
@@ -205,19 +205,20 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
     - T (Optional[Union[int, List[int]]]): A list of integers indicating the number of samples for each multivariate series.
     - device (torch.device): The device to use for the computation. Default is 'cpu'.
     - batch_size (int): Batch size for processing n-plets. Default is 100,000.
-    
+    - batch_size_D (int or None): Number of datasets to process per batch during Gaussian copula covariance computation. Reduces peak memory when D is large. Default is None (all datasets at once).
+
     Returns:
     - torch.Tensor: The measures for the nplets with shape (n_nplets, D, 4) where D is the number of matrices, n_nplets is the number of nplets to calculate over and 4 is the number of metrics (tc, dtc, o, s)
     '''
 
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     if nplets is None:
         # If no nplets, then compute for the entire systems
         nplets = torch.ones(N, device=device).unsqueeze(0)
     else:
         # If nplets are not tensors, convert to tensor
-        nplets = torch.as_tensor(nplets).to(device).contiguous()
+        nplets = torch.as_tensor(nplets, device=device).contiguous()
 
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
@@ -247,6 +248,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
                                      covmat_precomputed: bool=False,
                                      T: Optional[int]=None,
                                      batch_size: int = 100000,
+                                     batch_size_D: Optional[int] = None,
                                      device: torch.device = torch.device('cpu'),
                                      num_workers: int = 0,
                                      batch_aggregation: Optional[Callable[[any],any]] = None,
@@ -266,6 +268,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
         - covmat_precomputed (bool): If True, X is a covariance matrix (default: False).
         - T (Optional[int]): Number of samples used to compute bias correction (default: None). This parameter is only used if covmat_precomputed is True.
         - batch_size (int): Batch size for DataLoader (default: 1000000).
+        - batch_size_D (int or None): Number of datasets to process per batch during Gaussian copula covariance computation. Reduces peak memory when D is large. Default is None (all datasets at once).
         - device (torch.device): The device to use for the computation. Default is 'cpu'.
         - num_workers (int): Number of workers for DataLoader (default: 0).
         - batch_aggregation (Optional[Callable[[any],any]]): Function to aggregate the batched data (default: pd.concat).
@@ -275,7 +278,7 @@ def multi_order_measures_hot_encoded(X: TensorLikeArray,
         pd.DataFrame: DataFrame containing computed metrics.
     """
     
-    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device)
+    covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
 
     max_order = N if max_order is None else max_order
 
