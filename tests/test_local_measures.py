@@ -41,7 +41,7 @@ class TestLocalNpletsMeasures(unittest.TestCase):
     def _compute(self, X=None, nplets=None):
         X = self.X if X is None else X
         nplets = self.nplets if nplets is None else nplets
-        return local_nplets_measures(X, nplets, device='cpu', dtype=torch.float64)
+        return local_nplets_measures(X, nplets, device='cpu')
 
     def test_output_shape_single_dataset(self):
         result = self._compute()
@@ -79,12 +79,13 @@ class TestLocalNpletsMeasures(unittest.TestCase):
         """
         order = 3
         nplets = torch.tensor(list(combinations(range(self.N), order)))
+        X32 = self.X.astype(np.float32)
         nplets_out = local_nplets_measures(
-            self.X, nplets, device='cpu', dtype=torch.float32,
+            X32, nplets, device='cpu',
         )  # (C(N,3), 1, T, 4)
         multi_out = local_multi_order_measures(
-            self.X, min_order=order, max_order=order,
-            device='cpu', dtype=torch.float32,
+            X32, min_order=order, max_order=order,
+            device='cpu',
         )  # {3: (C(N,3), 1, T, 4)}
         torch.testing.assert_close(nplets_out, multi_out[order], atol=0, rtol=0)
 
@@ -99,11 +100,11 @@ class TestTimeAveragedLocalMeasures(unittest.TestCase):
         """mean(dim=2) of local_multi_order_measures == time_averaged with bias_correction=False."""
         local_results = local_multi_order_measures(
             self.X, min_order=3, max_order=3,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
         )
         averaged_no_bias = time_averaged_local_measures(
             self.X, min_order=3, max_order=3,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
             bias_correction=False,
         )
         manual_avg = local_results[3].mean(dim=2)  # [n_comb, D, 4]
@@ -116,12 +117,12 @@ class TestTimeAveragedLocalMeasures(unittest.TestCase):
         """Results with and without bias correction must differ."""
         no_bias = time_averaged_local_measures(
             self.X, min_order=3, max_order=3,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
             bias_correction=False,
         )
         with_bias = time_averaged_local_measures(
             self.X, min_order=3, max_order=3,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
             bias_correction=True,
         )
         max_diff = torch.abs(with_bias[3] - no_bias[3]).max().item()
@@ -134,7 +135,7 @@ class TestTimeAveragedLocalMeasures(unittest.TestCase):
         """After time averaging, TC and S must be >= 0 for the Gaussian copula."""
         result = time_averaged_local_measures(
             self.X, min_order=3, max_order=3,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
             bias_correction=True,
         )
         tc = result[3][:, :, 0]  # [n_comb, D]
@@ -153,7 +154,7 @@ class TestTimeAveragedLocalMeasures(unittest.TestCase):
         N = self.X.shape[1]  # 5
         result = time_averaged_local_measures(
             self.X, min_order=3, max_order=4,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
             bias_correction=False,
         )
         for order in [3, 4]:
@@ -186,11 +187,10 @@ class TestLocalMatchesOriginalMeasures(unittest.TestCase):
                 nplets = torch.tensor(list(combinations(range(self.N_SUB), order)))
                 original = nplets_measures(self.X, nplets)   # (C(N,K), 1, 4)
                 local = time_averaged_local_measures(
-                    self.X,
+                    self.X.astype(np.float32),
                     min_order=order,
                     max_order=order,
                     device='cpu',
-                    dtype=torch.float32,
                     bias_correction=True,
                 )                                             # {order: (C(N,K), 1, 4)}
                 torch.testing.assert_close(
@@ -205,12 +205,12 @@ class TestLocalMatchesOriginalMeasures(unittest.TestCase):
         order = 3
         nplets = torch.tensor(list(combinations(range(self.N_SUB), order)))
         original = nplets_measures([self.X, self.X], nplets)   # (C(N,K), 2, 4)
+        X32 = self.X.astype(np.float32)
         local = time_averaged_local_measures(
-            [self.X, self.X],
+            [X32, X32],
             min_order=order,
             max_order=order,
             device='cpu',
-            dtype=torch.float32,
             bias_correction=True,
         )
         torch.testing.assert_close(
@@ -253,15 +253,22 @@ class TestTimeAveragedLocalVsGroundTruth(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def _run(self, X=None, **kwargs):
+        if X is None:
+            X = self.X
+        if isinstance(X, np.ndarray):
+            X = X.astype(np.float32)
+        elif isinstance(X, list):
+            X = [x.astype(np.float32) if isinstance(x, np.ndarray) else x.float() for x in X]
+        elif isinstance(X, torch.Tensor):
+            X = X.float()
         defaults = dict(
             min_order=self.MIN_ORDER,
             max_order=self.MAX_ORDER,
             device='cpu',
-            dtype=torch.float32,
             bias_correction=True,
         )
         defaults.update(kwargs)
-        return time_averaged_local_measures(self.X if X is None else X, **defaults)
+        return time_averaged_local_measures(X, **defaults)
 
     def _result_to_sorted_df(self, result):
         """Convert a result dict {order: Tensor[C(N,K), D, 4]} to a sorted DataFrame.
@@ -317,7 +324,7 @@ class TestTimeAveragedLocalVsGroundTruth(unittest.TestCase):
 
     def test_precomputed_xg_covmats_matches_ground_truth(self):
         """Passing pre-normalised Xg + covmats gives the same result as raw timeseries."""
-        X_t = torch.as_tensor(self.X).unsqueeze(0)           # (1, T, N_SUB)
+        X_t = torch.as_tensor(self.X, dtype=torch.float32).unsqueeze(0)  # (1, T, N_SUB)
         Xg, covmats = gaussian_copula_covmat(X_t, return_xg=True)
         result = self._run(X=Xg.squeeze(0), covmats=covmats.squeeze(0))
         self._compare_with_ground_truth(result)

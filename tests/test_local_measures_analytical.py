@@ -125,7 +125,6 @@ class TestLocalMeasuresPointwiseGroundTruth(unittest.TestCase):
             nplets=nplets,
             covmats=C_t,
             device='cpu',
-            dtype=torch.float64,
         )  # (1, 1, n_pts, 4)
 
         cls.computed = res[0, 0, :, :].numpy()  # (n_pts, 4)
@@ -229,7 +228,7 @@ class TestLocalMeasuresPointwiseGroundTruth(unittest.TestCase):
 
         res_id = local_nplets_measures(
             Xg_t, nplets=nplets, covmats=C_id_t,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
         )
         tc_id = res_id[0, 0, :, 0].numpy()
 
@@ -252,7 +251,7 @@ class TestLocalMeasuresPointwiseGroundTruth(unittest.TestCase):
 
         res_id = local_nplets_measures(
             Xg_t, nplets=nplets, covmats=C_id_t,
-            device='cpu', dtype=torch.float64,
+            device='cpu',
         )
         computed_id = res_id[0, 0, :, :].numpy()
 
@@ -302,7 +301,6 @@ class TestLocalMeasuresSimulatedData(unittest.TestCase):
             cls.X,
             nplets=cls.nplets,
             device='cpu',
-            dtype=torch.float64,
         )  # (1, 1, T, 4)
         cls.local_vals = res[0, 0, :, :].numpy()    # (T, 4)
 
@@ -380,7 +378,7 @@ class TestLocalMeasuresSimulatedData(unittest.TestCase):
         """local_nplets_measures must return (1, 1, T, 4) for a single n-plet."""
         K = self.C.shape[0]
         res = local_nplets_measures(
-            self.X, nplets=self.nplets, device='cpu', dtype=torch.float64,
+            self.X, nplets=self.nplets, device='cpu',
         )
         self.assertEqual(res.shape, (1, 1, self.T, 4))
 

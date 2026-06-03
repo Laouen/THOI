@@ -42,7 +42,7 @@ def _gather_nplet_covs(covmats, nplets):
     """Extract covariance submatrices for specified n-plets."""
     B, K = nplets.shape
     D, N, _ = covmats.shape
-    device, dtype = covmats.device, covmats.dtype
+    device = covmats.device
     d_idx = torch.arange(D, device=device).view(1,D,1,1).expand(B,D,K,K)
     r_idx = nplets[:,None,:,None].expand(B,D,K,K)
     c_idx = nplets[:,None,None,:].expand(B,D,K,K)
@@ -122,7 +122,6 @@ def _local_single_batch_from_xg(
     *,
     allmin1: Optional[torch.Tensor],
     device: torch.device,
-    dtype: torch.dtype,
     time_chunk: int,
     eps: float,
 ) -> torch.Tensor:
@@ -151,7 +150,7 @@ def _local_single_batch_from_xg(
     Lj, logdet_j = _batched_chol_logdet(S, eps=eps)  # [B*D, K, K], [B*D]
     var = torch.diagonal(S, dim1=-2, dim2=-1)         # [B*D, K]
 
-    batch_out = torch.empty(B, D, T, 4, device=device, dtype=dtype)
+    batch_out = torch.empty(B, D, T, 4, device=device, dtype=Xg.dtype)
 
     for t0 in range(0, T, time_chunk):
         t1 = min(T, t0 + time_chunk)
@@ -192,12 +191,10 @@ def _local_nplets_from_xg(Xg: torch.Tensor,
                           nplets: torch.Tensor,
                           *,
                           device: torch.device,
-                          dtype: torch.dtype,
                           batch_size: int,
                           time_chunk: int,
                           eps: float) -> torch.Tensor:
     """Core local nplets computation from pre-normalized Gaussian data."""
-    nplets = torch.as_tensor(nplets, device=device, dtype=torch.long).contiguous()
     K = nplets.shape[1]
     # Precompute leave-one-out index table once — reused across every batch and time chunk.
     allmin1 = _all_min_1_ids(K, device=device) if K >= 3 else None  # (K, K-1)
@@ -207,7 +204,7 @@ def _local_nplets_from_xg(Xg: torch.Tensor,
         npl = nplets[start:start + batch_size]
         results.append(_local_single_batch_from_xg(
             Xg, covmats, npl,
-            allmin1=allmin1, device=device, dtype=dtype,
+            allmin1=allmin1, device=device,
             time_chunk=time_chunk, eps=eps,
         ))
     return torch.cat(results, dim=0)
@@ -216,7 +213,7 @@ def _local_nplets_from_xg(Xg: torch.Tensor,
 def local_nplets_measures(X, nplets=None, *,
                           covmats: Optional[torch.Tensor] = None,
                           batch_size_D: Optional[int] = None,
-                          device='cpu', dtype=torch.float32,
+                          device='cpu',
                           batch_size=100000, time_chunk=2048, eps=1e-10) -> torch.Tensor:
     """
     Compute local (time-resolved) higher-order information measures.
@@ -247,8 +244,6 @@ def local_nplets_measures(X, nplets=None, *,
         Only used when covmats=None. Reduces peak memory when D is large.
     device : str, default='cpu'
         Device for computation.
-    dtype : torch.dtype, default=torch.float32
-        Data type for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
     time_chunk : int, default=2048
@@ -280,16 +275,18 @@ def local_nplets_measures(X, nplets=None, *,
             'they must come from the same gaussian_copula_covmat call.'
         )
 
-    Xg = Xg.to(device=device, dtype=dtype)
-    covmats = covmats_t.to(device=device, dtype=dtype)
+    Xg = Xg.to(device=device)
+    covmats = covmats_t.to(device=device)
     N = Xg.shape[2]
 
     if nplets is None:
         nplets = torch.arange(N, device=device).unsqueeze(0)
+    else:
+        nplets = torch.as_tensor(nplets, device=device, dtype=torch.long).contiguous()
 
     return _local_nplets_from_xg(
         Xg, covmats, nplets,
-        device=device, dtype=dtype,
+        device=device,
         batch_size=batch_size, time_chunk=time_chunk, eps=eps,
     )
 
@@ -300,9 +297,8 @@ def local_multi_order_measures(X: TensorLikeArray,
                                *,
                                covmats: Optional[torch.Tensor] = None,
                                batch_size_D: Optional[int] = None,
-                               device: str = 'cpu',
-                               dtype: torch.dtype = torch.float32,
                                batch_size: int = 100000,
+                               device: str = 'cpu',
                                time_chunk: int = 4096,
                                eps: float = 1e-10,
                                batch_data_collector: Optional[Callable] = None,
@@ -337,8 +333,6 @@ def local_multi_order_measures(X: TensorLikeArray,
         Only used when covmats=None. Reduces peak memory when D is large.
     device : str, default='cpu'
         Device for computation.
-    dtype : torch.dtype, default=torch.float32
-        Data type for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
     time_chunk : int, default=4096
@@ -381,8 +375,8 @@ def local_multi_order_measures(X: TensorLikeArray,
             'they must come from the same gaussian_copula_covmat call.'
         )
 
-    Xg = Xg.to(device=device, dtype=dtype)
-    covmats_t = covmats_t.to(device=device, dtype=dtype)
+    Xg = Xg.to(device=device)
+    covmats_t = covmats_t.to(device=device)
     N = Xg.shape[2]
 
     if max_order is None:
@@ -397,7 +391,7 @@ def local_multi_order_measures(X: TensorLikeArray,
         return _local_single_batch_from_xg(
             Xg, covmats_t, nplets,
             allmin1=_allmin1_cache[K],
-            device=device, dtype=dtype,
+            device=device,
             time_chunk=time_chunk, eps=eps,
         )
 
@@ -419,7 +413,6 @@ def time_averaged_local_measures(
     covmats: Optional[torch.Tensor] = None,
     batch_size_D: Optional[int] = None,
     device: str = 'cpu',
-    dtype: torch.dtype = torch.float32,
     batch_size: int = 100000,
     time_chunk: int = 4096,
     eps: float = 1e-10,
@@ -447,8 +440,6 @@ def time_averaged_local_measures(
         Reduces peak memory when D is large.
     device : str, default='cpu'
         Device for computation.
-    dtype : torch.dtype, default=torch.float32
-        Data type for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
     time_chunk : int, default=4096
@@ -473,7 +464,6 @@ def time_averaged_local_measures(
         covmats=covmats,
         batch_size_D=batch_size_D,
         device=device,
-        dtype=dtype,
         batch_size=batch_size,
         time_chunk=time_chunk,
         eps=eps,

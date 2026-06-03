@@ -198,7 +198,7 @@ def _normalize_input_data(X: TensorLikeArray,
             X_tensor = X_tensor.unsqueeze(0) if X_tensor.ndim == 2 else X_tensor
             T = [X_tensor.shape[1]] * X_tensor.shape[0]
             _, covmats = gaussian_copula_covmat(X_tensor, return_xg=False, batch_size_D=batch_size_D)
-        except:
+        except Exception:
             X_list = [torch.as_tensor(x) for x in X]
             assert all(x.ndim == 2 for x in X_list), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'
             assert all(x.shape[1] == X_list[0].shape[1] for x in X_list), 'All multivariate series should have dimensions (T, N) where T may vary and N be constant across all series'

@@ -455,7 +455,7 @@ def concat_batched_tensors(batched_tensors: List[Tuple[torch.Tensor, torch.Tenso
     ```
     """
     
-    # Unpac the batched tensors
+    # Unpack the batched tensors
     nplets_measures, nplets_idxs, nplets_scores = zip(*batched_tensors)
     
     # Concatenate each tuple of tensors

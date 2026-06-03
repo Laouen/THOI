@@ -19,7 +19,7 @@ from thoi.measures.constants import GAUS_ENTR_NORMAL
 from thoi.commons import _normalize_input_data
 
 
-def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
+def _generate_nplets_covmats(covmats: torch.Tensor, nplets: torch.Tensor):
 
     # Ensure nplets is a float tensor
     # |batch_size| x |N|
@@ -54,9 +54,8 @@ def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     return nplets_covmat
 
 
-def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_size: int, N: int, D: int, device: torch.device):
-    
-    
+def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_size: int, N: int, D: int, device: torch.device, dtype: torch.dtype):
+
     # Compute bias corrector if from sampled data (T is not None)
     if T is not None:
         assert len(T) == D, 'T must have the same length as the number of datasets'
@@ -64,11 +63,11 @@ def _get_bias_correctors(T: Optional[List[int]], orders: torch.Tensor, batch_siz
         bias_correctors = torch.tensor([
             [_gaussian_entropy_bias_correction(order,t) for t in T]
             for order in range(1,N+1)
-        ], device=device)
+        ], device=device, dtype=dtype)
 
     else:
         # |N| x |D|
-        bias_correctors = torch.zeros((N,D), device=device)
+        bias_correctors = torch.zeros((N,D), device=device, dtype=dtype)
 
     # |batch_size x D|
     bc1 = bias_correctors[0].repeat(batch_size)
@@ -91,7 +90,7 @@ def _get_tc_dtc_from_batched_covmat(covmats: torch.Tensor,
     Parameters:
     - covmats (torch.Tensor): The covariance matrices with shape (batch_size*D, N, N)
     - nplets (torch.Tensor): The nplets to compute the measures with shape (batch_size, N)
-    - orders (torch.Tensor): The order of each bached covmant (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
+    - orders (torch.Tensor): The order of each batched covmat (equivalent to covmat[...,0].sum(dim=1).int()), this must be provided to avoid multiple re calculations.
     - allmin1 (torch.Tensor): The indexes of marginal covariance matrices with shape (N, N-1)
     - bc1 (torch.Tensor): The bias corrector for the first order with shape (batch_size*D)
     - bcN (torch.Tensor): The bias corrector for the order with shape (batch_size*D)
@@ -157,11 +156,11 @@ def _compute_nplets_measures_hot_encoded(covmats: torch.Tensor,
 
     # Create bias corrector values
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
-    bc1, bcN, bcNmin1 = _get_bias_correctors(T, orders, batch_size, N, D, device)
+    bc1, bcN, bcNmin1 = _get_bias_correctors(T, orders, batch_size, N, D, device, covmats.dtype)
 
     # Create the covariance matrices for each nplet in the batch
     # |batch_size| x |D| x |N| x |N|
-    nplets_covmat = _generate_nplets_covmants(covmats, nplets)
+    nplets_covmat = _generate_nplets_covmats(covmats, nplets)
 
     # Pack covmats in a single batch
     # |batch_size x D| x |N| x |N|
@@ -219,7 +218,7 @@ def nplets_measures_hot_encoded(X: TensorLikeArray,
         nplets = torch.ones(N, device=device).unsqueeze(0)
     else:
         # If nplets are not tensors, convert to tensor
-        nplets = torch.as_tensor(nplets).to(device).contiguous()
+        nplets = torch.as_tensor(nplets, device=device).contiguous()
 
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'

@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 import torch
 
@@ -52,11 +53,10 @@ def test_time_averaged_local_measures_match_traditional_on_disk_data():
     # Run the wrapper on the same subsampled timeseries with conservative
     # memory settings. Decreasing time_chunk reduces peak memory usage.
     wrapper_res = time_averaged_local_measures(
-        X_sub,
+        X_sub.astype(np.float32),
         min_order=N,
         max_order=N,
         device="cpu",
-        dtype=torch.float32,
         batch_size=1,
         time_chunk=50,
         eps=1e-6,

@@ -34,7 +34,7 @@ def _indices_to_hot_encoded(nplets_idxs, N):
     - multi_hot: torch.Tensor of shape (batch_size, N)
     """
     return torch.stack([
-        F.one_hot(torch.as_tensor(lst), num_classes=N).sum(dim=0)
+        F.one_hot(torch.as_tensor(lst, dtype=torch.long), num_classes=N).sum(dim=0)
         for lst in nplets_idxs
     ])
 
@@ -60,7 +60,7 @@ def _generate_nplets_marginal_entropies(marginal_entropies: torch.Tensor, nplets
     return nplets_marginal_entropies
     
 
-def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
+def _generate_nplets_covmats(covmats: torch.Tensor, nplets: torch.Tensor):
     
     batch_size, order = nplets.shape
     D, N = covmats.shape[:2]
@@ -87,17 +87,17 @@ def _generate_nplets_covmants(covmats: torch.Tensor, nplets: torch.Tensor):
     return nplets_covmat
 
 
-def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device):
+def _get_bias_correctors(T: Optional[List[int]], order: int, batch_size: int, D: int, device: torch.device, dtype: torch.dtype):
     if T is not None:
         # |batch_size|
-        bc1 = torch.tensor([_gaussian_entropy_bias_correction(1,t) for t in T], device=device)
-        bcN = torch.tensor([_gaussian_entropy_bias_correction(order,t) for t in T], device=device)
-        bcNmin1 = torch.tensor([_gaussian_entropy_bias_correction(order-1,t) for t in T], device=device)
+        bc1 = torch.tensor([_gaussian_entropy_bias_correction(1,t) for t in T], device=device, dtype=dtype)
+        bcN = torch.tensor([_gaussian_entropy_bias_correction(order,t) for t in T], device=device, dtype=dtype)
+        bcNmin1 = torch.tensor([_gaussian_entropy_bias_correction(order-1,t) for t in T], device=device, dtype=dtype)
     else:
         # |batch_size|
-        bc1 = torch.tensor([0] * D, device=device)
-        bcN = torch.tensor([0] * D, device=device)
-        bcNmin1 = torch.tensor([0] * D, device=device)
+        bc1 = torch.tensor([0] * D, device=device, dtype=dtype)
+        bcN = torch.tensor([0] * D, device=device, dtype=dtype)
+        bcNmin1 = torch.tensor([0] * D, device=device, dtype=dtype)
 
     # |batch_size x D|
     bc1 = bc1.repeat(batch_size)
@@ -324,10 +324,9 @@ def nplets_measures(X: Union[TensorLikeArray],
         nplets = _indices_to_hot_encoded(nplets, N)
         return nplets_measures_hot_encoded(covmats, nplets, covmat_precomputed=True, T=T)
     elif nplets is None:
-        nplets = torch.arange(N, device=device).unsqueeze(0)
-    
-    # If nplets are not tensors, convert to tensor
-    nplets = torch.as_tensor(nplets).to(device).contiguous()
+        nplets = torch.arange(N, device=device, dtype=torch.long).unsqueeze(0)
+    else:
+        nplets = torch.as_tensor(nplets, device=device, dtype=torch.long).contiguous()
         
     # nplets must be a batched tensor
     assert len(nplets.shape) == 2, 'nplets must be a batched tensor with shape (batch_size, order)'
@@ -340,7 +339,7 @@ def nplets_measures(X: Union[TensorLikeArray],
 
     # Create bias corrector values
     # |batch_size x D|, |batch_size x D|, |batch_size x D|
-    bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device)
+    bc1, bcN, bcNmin1 = _get_bias_correctors(T, order, batch_size, D, device, covmats.dtype)
 
     # Create DataLoader for nplets
     dataloader = DataLoader(nplets, batch_size=batch_size, shuffle=False)
@@ -351,7 +350,7 @@ def nplets_measures(X: Union[TensorLikeArray],
 
         # Create the covariance matrices for each nplet in the batch
         # |curr_batch_size| x |D| x |order| x |order|
-        nplets_covmats = _generate_nplets_covmants(covmats, nplet_batch)
+        nplets_covmats = _generate_nplets_covmats(covmats, nplet_batch)
         
         # Pack covmats in a single batch
         # |curr_batch_size x D| x |order| x |order|
@@ -602,12 +601,12 @@ def multi_order_measures(X: TensorLikeArray,
         if K not in _order_cache:
             _order_cache[K] = (
                 _all_min_1_ids(K, device=device),
-                _get_bias_correctors(T, K, batch_size, D, device),
+                _get_bias_correctors(T, K, batch_size, D, device, covmats.dtype),
             )
         allmin1, (bc1, bcN, bcNmin1) = _order_cache[K]
 
         # |curr_B| x |D| x |K| x |K|  →  |curr_B*D| x |K| x |K|
-        nplets_covmats = _generate_nplets_covmants(covmats, nplets).view(curr_B * D, K, K)
+        nplets_covmats = _generate_nplets_covmats(covmats, nplets).view(curr_B * D, K, K)
         # |curr_B| x |D| x |K|  →  |curr_B*D| x |K|
         nplets_marginal = _generate_nplets_marginal_entropies(marginal_entropies, nplets).view(curr_B * D, K)
 
