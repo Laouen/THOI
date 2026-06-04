@@ -311,54 +311,126 @@ def multi_order_measures(X: TensorLikeArray,
                        batch_data_collector: Optional[Callable] = None,
                        batch_aggregation: Optional[Callable] = None) -> dict:
     """
-    Compute TC, DTC, O, and S using the fast Gaussian covariance/precision formulas.
+    Compute multi-order measures (TC, DTC, O, S) for the given data matrix X.
 
-    Algebraically equivalent to the full entropy-based estimator but avoids the
-    single-exclusion entropy loop, making it faster for large orders.
+    The measurements computed are:
+        - Total Correlation (TC)
+        - Dual Total Correlation (DTC)
+        - O-information (O)
+        - S-information (S)
+
+    Uses the fast Gaussian covariance/precision (Cholesky) formulas, which are
+    algebraically equivalent to the entropy-based estimator but avoid the
+    single-exclusion entropy loop, making computation faster for large orders.
 
     Parameters
     ----------
     X : TensorLikeArray
-        Input data (shape (T, N) or list thereof) or precomputed covariance matrices
-        (shape (N, N) or list thereof, when covmat_precomputed=True).
-    min_order : int, default=3
-        Minimum order of interactions to compute.
+        Input data, which can be one of the following:
+        - A single torch.Tensor or np.ndarray with shape (T, N).
+        - A sequence (e.g., list) of torch.Tensor or np.ndarray, each with shape (T, N), representing multiple datasets.
+        - A sequence of sequences, where each inner sequence is an array-like object of shape (T, N).
+        If `covmat_precomputed` is True, X should be:
+        - A single torch.Tensor or np.ndarray covariance matrix with shape (N, N).
+        - A sequence of covariance matrices, each with shape (N, N).
+    min_order : int, optional
+        Minimum order to compute. Default is 3. Note: 3 <= min_order <= max_order <= N.
     max_order : int, optional
-        Maximum order. Defaults to N.
-    covmat_precomputed : bool, default=False
-        If True, X is treated as covariance matrices instead of raw data.
+        Maximum order to compute. If None, uses N (number of variables). Default is None. Note: min_order <= max_order <= N.
+    covmat_precomputed : bool, optional
+        If True, X is treated as covariance matrices instead of raw data. Default is False.
     T : int or list of int, optional
-        Sample sizes for bias correction (only used when covmat_precomputed=True).
-    batch_size : int, default=1_000_000
-        Maximum n-plets per batch.
-    batch_size_D : int or None, default=None
-        Number of datasets per batch during covariance computation.
-    device : torch.device, default=cpu
-        Computation device.
-    num_workers : int, default=0
-        DataLoader worker count.
-    offload_to_cpu : bool, default=True
-        When True (default), each batch is moved to CPU immediately after
-        computation, keeping GPU memory usage proportional to a single batch.
-        Set to False only if the GPU has enough memory to hold all results
-        across all orders simultaneously; doing so avoids repeated small
-        host-device transfers and can be faster in that case.
-        Has no effect when a custom ``batch_data_collector`` is provided.
+        Number of samples used to compute bias correction. This parameter is used only if `covmat_precomputed` is True.
+        If X is a sequence of covariance matrices, T should be a list of sample sizes corresponding to each matrix.
+        If T is None and `covmat_precomputed` is True, bias correction is not applied. Default is None.
+    batch_size : int, optional
+        Batch size for DataLoader. Default is 1,000,000.
+    batch_size_D : int or None, optional
+        Number of datasets to process per batch during Gaussian copula covariance computation.
+        Reduces peak memory when D is large. Default is None (all datasets at once).
+    device : torch.device, optional
+        Device to use for computation. Default is torch.device('cpu').
+    num_workers : int, optional
+        Number of workers for DataLoader. Default is 0.
+    offload_to_cpu : bool, optional
+        When True (default), each batch is moved to CPU immediately after computation,
+        keeping GPU memory usage proportional to a single batch.
+        Set to False only if the GPU has enough memory to hold all results across all
+        orders simultaneously; doing so avoids repeated small host-device transfers and
+        can be faster in that case. Has no effect when a custom ``batch_data_collector``
+        is provided. Default is True.
     batch_data_collector : callable, optional
         ``(nplets: Tensor[B, K], result: Tensor[B, D, 4], bn: int) -> Any``
-        Post-processes each batch. Last dimension of result is (TC, DTC, O, S).
+        Post-processes each batch. The last dimension of result is (TC, DTC, O, S).
         When provided, ``offload_to_cpu`` is ignored.
+        Defaults to an identity that returns ``(nplets, result)`` as a tuple, moving
+        both to CPU first if ``offload_to_cpu=True``.
     batch_aggregation : callable, optional
         ``(items: list[Any]) -> Any``
-        Aggregates all collected items into the final result.
-        Defaults to ``batched_results_to_dataframe`` → ``pd.DataFrame``.
+        Aggregates all collected items (across every order) into the final result.
+        Defaults to ``batched_results_to_dataframe``, which builds a pandas DataFrame
+        from the flat list of ``(nplets, result)`` tuples.
 
     Returns
     -------
     pd.DataFrame or Any
-        By default, a DataFrame with columns ``dataset``, ``tc``, ``dtc``,
+        By default, a pandas DataFrame with columns ``dataset``, ``tc``, ``dtc``,
         ``o``, ``s``, ``var_0 … var_{N-1}``, ``order``, sorted by ``dataset``.
         Returns whatever ``batch_aggregation`` produces when one is provided.
+
+    Where
+    -----
+    D : int
+        Number of datasets. If X is a single dataset, D = 1.
+    N : int
+        Number of variables (features) in each dataset.
+    T : int
+        Number of samples in each dataset (if applicable).
+    order : int
+        The size of the n-plets being analyzed, ranging from `min_order` to `max_order`.
+    batch_size : int
+        Number of n-plets processed in each batch.
+
+    Notes
+    -----
+    - When both ``batch_data_collector`` and ``batch_aggregation`` are None, the default
+      pipeline uses ``batched_results_to_dataframe`` which builds the DataFrame in one
+      pass — more efficient than creating one DataFrame per batch.
+    - Ensure that the length of `T` matches the number of datasets when `covmat_precomputed`
+      is `True` and `X` is a sequence of covariance matrices.
+    - The function computes measures for all combinations of variables of orders ranging
+      from `min_order` to `max_order`.
+    - The function is optimized for batch processing using PyTorch tensors, facilitating
+      efficient computations on large datasets.
+
+    Examples
+    --------
+    Using default aggregation (returns a DataFrame):
+
+    >>> result = multi_order_measures(X, min_order=3, max_order=5)
+
+    Using custom batch data collector and aggregation:
+
+    >>> def custom_batch_data_collector(nplets, result, batch_number):
+    ...     # result has shape (batch_size, D, 4) — last dim is (tc, dtc, o, s)
+    ...     return custom_data
+    ...
+    >>> def custom_batch_aggregation(batch_data_list):
+    ...     # Custom aggregation
+    ...     return final_result
+    ...
+    >>> result = multi_order_measures(
+    ...     X,
+    ...     min_order=3,
+    ...     max_order=5,
+    ...     batch_data_collector=custom_batch_data_collector,
+    ...     batch_aggregation=custom_batch_aggregation
+    ... )
+
+    References
+    ----------
+    .. [1] Rosas, Fernando E., et al. "Quantifying high-order interdependencies via multivariate extensions of the mutual information." Physical Review E 100.3 (2019): 032305.
+
     """
     covmats, D, N, T = _normalize_input_data(X, covmat_precomputed, T, device, batch_size_D=batch_size_D)
     max_order = N if max_order is None else max_order

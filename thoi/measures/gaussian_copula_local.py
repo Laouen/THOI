@@ -346,19 +346,23 @@ def local_multi_order_measures(X: TensorLikeArray,
         repeated small transfers.  See ``_batch_processing_multi_order`` for details.
     batch_data_collector : callable, optional
         ``(nplets: Tensor[B, K], result: Tensor[B, D, T, 4], bn: int) -> Any``
-        Post-processes each batch result. Defaults to the identity (returns the result tensor).
+        Post-processes each batch result.
         Can be used to write results to disk batch-by-batch to avoid materializing the full output.
+        Defaults to an identity that returns ``(nplets, result)`` as a tuple, moving both to CPU
+        first if ``offload_to_cpu=True``.
     batch_aggregation : callable, optional
         ``(items: list[Any]) -> Any``
-        Aggregates all collected items for one order.
-        Defaults to ``torch.cat(items, dim=0)`` → ``Tensor[C(N, order), D, T, 4]``.
+        Aggregates all collected items (across every order) into the final result.
+        Defaults to ``batched_results_to_dataframe``, which builds a pandas DataFrame
+        from the flat list of ``(nplets, result)`` tuples.
 
     Returns
     -------
-    dict
-        ``{order: aggregated_result}`` for each order in [min_order, max_order].
-        With default callbacks the values are ``Tensor[C(N, order), D, T, 4]``
-        where the last dimension is (TC, DTC, O, S).
+    pd.DataFrame or Any
+        By default, a pandas DataFrame with columns ``dataset``, ``time``, ``tc``, ``dtc``,
+        ``o``, ``s``, ``var_0 … var_{N-1}``, ``order``, sorted by ``dataset``.
+        The ``time`` column contains the time-point index for each local measure.
+        Returns whatever ``batch_aggregation`` produces when one is provided.
     """
 
     X_tensor = torch.as_tensor(np.array(X) if isinstance(X, (list, tuple)) else X)
