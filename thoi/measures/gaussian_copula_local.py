@@ -6,7 +6,7 @@ import torch
 from thoi.typing import TensorLikeArray
 from thoi.commons import gaussian_copula_covmat
 from thoi.measures.utils import _all_min_1_ids, _get_single_exclusion_covmats
-from thoi.measures.gaussian_copula import _batch_processing_multi_order
+from thoi.batch_processing_multi_order import _batch_processing_multi_order
 
 
 def gaussian_tc_bias_correction(K: int, T: int, device: torch.device = torch.device('cpu'), dtype=torch.float64) -> torch.Tensor:
