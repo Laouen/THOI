@@ -174,6 +174,98 @@ def batch_to_csv(nplets_idxs: torch.Tensor,
     return df
 
 
+def batched_results_to_dataframe(
+    batches: List[Tuple[torch.Tensor, torch.Tensor]],
+    N: int,
+    columns: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    """Build a pandas DataFrame from a list of (nplets, results) batch tuples in one pass.
+
+    Converts each nplet batch to a boolean ``[B, N]`` representation using a
+    GPU-friendly scatter operation, concatenates all on the device, then moves
+    everything to CPU once for the final pandas construction.  Handles mixed-order
+    batches (K varies per item) and both flat ``Tensor[B, D, 4]`` and local
+    ``Tensor[B, D, T, 4]`` results without any regrouping by order.
+
+    Parameters
+    ----------
+    batches : list of (Tensor[B, K], Tensor[B, D, ...]) tuples
+        Raw identity-collector output.  K may vary between items.
+    N : int
+        Total number of variables (width of the boolean variable columns).
+    columns : list of str, optional
+        Variable names.  Defaults to ``['var_0', ..., 'var_{N-1}']``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``dataset``, [``time``], ``tc``, ``dtc``, ``o``, ``s``,
+        ``var_0 … var_{N-1}``, ``order``.  Sorted by ``dataset``.
+        The ``time`` column is present only for local (time-resolved) results.
+    """
+    if columns is None:
+        columns = [f'var_{i}' for i in range(N)]
+
+    # Scatter each nplet batch to boolean [B, N] on device; collect all tensors.
+    bool_list = []
+    results_list = []
+    for nplets, result in batches:
+        B, K = nplets.shape
+        device = nplets.device
+        bool_repr = torch.zeros(B, N, dtype=torch.bool, device=device)
+        bool_repr.scatter_(1, nplets, torch.ones(B, K, dtype=torch.bool, device=device))
+        bool_list.append(bool_repr)
+        results_list.append(result)
+
+    # Concatenate all on device — single allocation per tensor.
+    bool_all    = torch.cat(bool_list,    dim=0)  # [total_B, N]
+    results_all = torch.cat(results_list, dim=0)  # [total_B, D, ...4]
+
+    total_B   = bool_all.shape[0]
+    D         = results_all.shape[1]
+    is_local  = results_all.ndim == 4    # [B, D, T, 4]
+    order_col = bool_all.sum(dim=1)      # [total_B]
+    device    = bool_all.device
+
+    if is_local:
+        T = results_all.shape[2]
+        # All expansions on device.
+        results_flat  = results_all.reshape(total_B * D * T, 4)
+        bool_expanded = bool_all.repeat_interleave(D * T, dim=0)
+        dataset_col   = torch.arange(D, device=device).repeat_interleave(T).repeat(total_B)
+        time_col      = torch.arange(T, device=device).repeat(total_B * D)
+        order_col_exp = order_col.repeat_interleave(D * T)
+        # Single CPU transfer — one .cpu().numpy() per column.
+        bool_np       = bool_expanded.cpu().numpy()
+        results_np    = results_flat.cpu().numpy()
+        df = pd.DataFrame({
+            'dataset': dataset_col.cpu().numpy(),
+            'time':    time_col.cpu().numpy(),
+            'tc':  results_np[:, 0], 'dtc': results_np[:, 1],
+            'o':   results_np[:, 2], 's':   results_np[:, 3],
+            **{col: bool_np[:, i] for i, col in enumerate(columns)},
+            'order': order_col_exp.cpu().numpy(),
+        })
+    else:
+        # All expansions on device.
+        results_flat  = results_all.reshape(total_B * D, 4)
+        bool_expanded = bool_all.repeat_interleave(D, dim=0)
+        dataset_col   = torch.arange(D, device=device).repeat(total_B)
+        order_col_exp = order_col.repeat_interleave(D)
+        # Single CPU transfer.
+        bool_np       = bool_expanded.cpu().numpy()
+        results_np    = results_flat.cpu().numpy()
+        df = pd.DataFrame({
+            'dataset': dataset_col.cpu().numpy(),
+            'tc':  results_np[:, 0], 'dtc': results_np[:, 1],
+            'o':   results_np[:, 2], 's':   results_np[:, 3],
+            **{col: bool_np[:, i] for i, col in enumerate(columns)},
+            'order': order_col_exp.cpu().numpy(),
+        })
+
+    return df.sort_values(by='dataset', kind='stable').reset_index(drop=True)
+
+
 def concat_and_sort_csv(batched_dataframes) -> pd.DataFrame:
     """
     .. _collectors__concat_and_sort_csv:

@@ -9,14 +9,14 @@ from thoi.measures.utils import _all_min_1_ids, _get_single_exclusion_covmats
 from thoi.measures.gaussian_copula import _batch_processing_multi_order
 
 
-def gaussian_tc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
+def gaussian_tc_bias_correction(K: int, T: int, device: torch.device = torch.device('cpu'), dtype=torch.float64) -> torch.Tensor:
     """Bias for TC = sum H(X_i) - H(X_1..X_K)."""
     from thoi.measures.utils import _gaussian_entropy_bias_correction
     return K * _gaussian_entropy_bias_correction(1, T).to(device=device, dtype=dtype) - \
            _gaussian_entropy_bias_correction(K, T).to(device=device, dtype=dtype)
 
 
-def gaussian_dtc_bias_correction(K: int, T: int, device='cpu', dtype=torch.float64) -> torch.Tensor:
+def gaussian_dtc_bias_correction(K: int, T: int, device: torch.device = torch.device('cpu'), dtype=torch.float64) -> torch.Tensor:
     """Bias for DTC = sum_i H(X_{-i}) - (K-1) H(X_1..X_K)."""
     from thoi.measures.utils import _gaussian_entropy_bias_correction
     return K * _gaussian_entropy_bias_correction(K - 1, T).to(device=device, dtype=dtype) - \
@@ -213,7 +213,7 @@ def _local_nplets_from_xg(Xg: torch.Tensor,
 def local_nplets_measures(X, nplets=None, *,
                           covmats: Optional[torch.Tensor] = None,
                           batch_size_D: Optional[int] = None,
-                          device='cpu',
+                          device: torch.device = torch.device('cpu'),
                           batch_size=100000, time_chunk=2048, eps=1e-10) -> torch.Tensor:
     """
     Compute local (time-resolved) higher-order information measures.
@@ -242,7 +242,7 @@ def local_nplets_measures(X, nplets=None, *,
     batch_size_D : int or None, default=None
         Number of datasets to process per batch during Gaussian copula computation.
         Only used when covmats=None. Reduces peak memory when D is large.
-    device : str, default='cpu'
+    device : torch.device, default=torch.device('cpu')
         Device for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
@@ -298,9 +298,10 @@ def local_multi_order_measures(X: TensorLikeArray,
                                covmats: Optional[torch.Tensor] = None,
                                batch_size_D: Optional[int] = None,
                                batch_size: int = 100000,
-                               device: str = 'cpu',
+                               device: torch.device = torch.device('cpu'),
                                time_chunk: int = 4096,
                                eps: float = 1e-10,
+                               offload_to_cpu: bool = True,
                                batch_data_collector: Optional[Callable] = None,
                                batch_aggregation: Optional[Callable] = None) -> dict:
     """
@@ -331,7 +332,7 @@ def local_multi_order_measures(X: TensorLikeArray,
     batch_size_D : int or None, default=None
         Number of datasets to process per batch during Gaussian copula computation.
         Only used when covmats=None. Reduces peak memory when D is large.
-    device : str, default='cpu'
+    device : torch.device, default=torch.device('cpu')
         Device for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
@@ -339,6 +340,10 @@ def local_multi_order_measures(X: TensorLikeArray,
         Time chunk size for memory optimization.
     eps : float, default=1e-10
         Numerical stability epsilon.
+    offload_to_cpu : bool, default=True
+        When True, each batch is moved to CPU immediately after computation.
+        Set to False if the device has sufficient memory and you want to avoid
+        repeated small transfers.  See ``_batch_processing_multi_order`` for details.
     batch_data_collector : callable, optional
         ``(nplets: Tensor[B, K], result: Tensor[B, D, T, 4], bn: int) -> Any``
         Post-processes each batch result. Defaults to the identity (returns the result tensor).
@@ -400,8 +405,9 @@ def local_multi_order_measures(X: TensorLikeArray,
         batch_fn=_batch_fn,
         batch_size=batch_size,
         device=device,
-        batch_data_collector=batch_data_collector,   # None → identity (return result as-is)
-        batch_aggregation=batch_aggregation,          # None → torch.cat along dim=0
+        offload_to_cpu=offload_to_cpu,
+        batch_data_collector=batch_data_collector,
+        batch_aggregation=batch_aggregation,
     )
 
 
@@ -412,7 +418,7 @@ def time_averaged_local_measures(
     *,
     covmats: Optional[torch.Tensor] = None,
     batch_size_D: Optional[int] = None,
-    device: str = 'cpu',
+    device: torch.device = torch.device('cpu'),
     batch_size: int = 100000,
     time_chunk: int = 4096,
     eps: float = 1e-10,
@@ -438,7 +444,7 @@ def time_averaged_local_measures(
     batch_size_D : int or None, default=None
         Number of datasets to process per batch during Gaussian copula computation.
         Reduces peak memory when D is large.
-    device : str, default='cpu'
+    device : torch.device, default=torch.device('cpu')
         Device for computation.
     batch_size : int, default=100000
         Batch size for n-plet processing.
@@ -456,8 +462,9 @@ def time_averaged_local_measures(
         (n_combinations, n_samples, 4) where last dim is [TC, DTC, O, S].
     """
 
-    # First get local measures
-    local_results = local_multi_order_measures(
+    # Get raw (nplets, result) tuples — bypass the DataFrame default so we can do
+    # tensor operations (mean, bias correction) on the time dimension.
+    raw_batches = local_multi_order_measures(
         X,
         min_order=min_order,
         max_order=max_order,
@@ -467,15 +474,22 @@ def time_averaged_local_measures(
         batch_size=batch_size,
         time_chunk=time_chunk,
         eps=eps,
+        batch_aggregation=lambda items: items,
     )
+
+    # Group by order K (recoverable from nplets.shape[1]) and time-average per group.
+    from collections import defaultdict
+    groups: dict = defaultdict(list)
+    for nplets, measures in raw_batches:
+        groups[nplets.shape[1]].append(measures)
 
     # Time-average the results and apply bias correction AFTER temporal averaging
     averaged_results = {}
 
-    for K, measures in local_results.items():
-        # measures shape: [n_combinations, D, T, 4]
+    for K, measure_list in groups.items():
+        measures = torch.cat(measure_list, dim=0)  # [C(N,K), D, T, 4]
         # Average over time dimension
-        time_averaged = measures.mean(dim=2)  # -> [n_combinations, D, 4]
+        time_averaged = measures.mean(dim=2)  # -> [C(N,K), D, 4]
 
         if bias_correction and K >= 2:
             # Number of samples used to compute bias correction is the temporal length

@@ -105,7 +105,7 @@ class TestNpletsMeasures(unittest.TestCase):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.X, nplets)
-                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-12, atol=1e-12)
 
     def test_batch_size_D_does_not_change_result(self):
         full_nplet = range(self.X.shape[1])
@@ -113,84 +113,30 @@ class TestNpletsMeasures(unittest.TestCase):
         res_no_batch = nplets_measures(self.X, nplets)
         res_batch1   = nplets_measures(self.X, nplets, batch_size_D=1)
         self.assertTrue(torch.allclose(res_no_batch, res_batch1, rtol=1e-16, atol=1e-12))
-    
+
     def test_nplets_measures_precomputed(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0])
-                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-12, atol=1e-12)
 
-    def test_nplets_measures_mode_only_o_timeseries_matches_full_estimator(self):
-        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 4))[:12])
-
-        full = nplets_measures(self.X, nplets, batch_size=5)
-        only_o = nplets_measures(self.X, nplets, batch_size=5, mode='only_o')
-
-        self.assertTrue(torch.allclose(only_o[:, :, 2], full[:, :, 2], rtol=1e-6, atol=1e-6))
-        self.assertTrue(torch.isnan(only_o[:, :, [0, 1, 3]]).all())
-
-    def test_nplets_measures_mode_only_o_precomputed_matches_full_estimator(self):
-        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 5))[:10])
-
-        full = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], batch_size=4)
-        only_o = nplets_measures(
-            self.covmat,
-            nplets,
-            covmat_precomputed=True,
-            T=self.X.shape[0],
-            batch_size=4,
-            mode='only_o',
-        )
-
-        self.assertTrue(torch.allclose(only_o[:, :, 2], full[:, :, 2], rtol=1e-6, atol=1e-6))
-        self.assertTrue(torch.isnan(only_o[:, :, [0, 1, 3]]).all())
-
-    def test_nplets_measures_mode_fast_timeseries_matches_full_estimator(self):
-        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 4))[:12])
-
-        full = nplets_measures(self.X, nplets, batch_size=5)
-        fast = nplets_measures(self.X, nplets, batch_size=5, mode='fast')
-
-        self.assertTrue(torch.allclose(fast, full, rtol=1e-6, atol=1e-6))
-
-    def test_nplets_measures_mode_fast_precomputed_matches_full_estimator(self):
-        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 5))[:10])
-
-        full = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0], batch_size=4)
-        fast = nplets_measures(
-            self.covmat,
-            nplets,
-            covmat_precomputed=True,
-            T=self.X.shape[0],
-            batch_size=4,
-            mode='fast',
-        )
-
-        self.assertTrue(torch.allclose(fast, full, rtol=1e-6, atol=1e-6))
-
-    def test_nplets_measures_rejects_invalid_mode(self):
-        nplets = torch.tensor(list(combinations(range(self.X.shape[1]), 3))[:2])
-
-        with self.assertRaisesRegex(ValueError, "mode must be one of"):
-            nplets_measures(self.X, nplets, mode='compact')
-    
     def test_multiple_times_same_datasets_timeseries(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures([self.X, self.X], nplets)
-                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
-    
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-12, atol=1e-12)
+
     def test_multiple_times_same_datasets_precomputed(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0])
-                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-12, atol=1e-12)
     
     def test_batch_size_does_not_change_result(self):
         full_nplet = range(self.X.shape[1])

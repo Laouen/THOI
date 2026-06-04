@@ -86,8 +86,10 @@ class TestLocalNpletsMeasures(unittest.TestCase):
         multi_out = local_multi_order_measures(
             X32, min_order=order, max_order=order,
             device='cpu',
-        )  # {3: (C(N,3), 1, T, 4)}
-        torch.testing.assert_close(nplets_out, multi_out[order], atol=0, rtol=0)
+            batch_aggregation=lambda items: items,
+        )
+        measures_tensor = torch.cat([result for _, result in multi_out], dim=0)
+        torch.testing.assert_close(nplets_out, measures_tensor, atol=0, rtol=0)
 
 
 class TestTimeAveragedLocalMeasures(unittest.TestCase):
@@ -101,13 +103,15 @@ class TestTimeAveragedLocalMeasures(unittest.TestCase):
         local_results = local_multi_order_measures(
             self.X, min_order=3, max_order=3,
             device='cpu',
+            batch_aggregation=lambda items: items,
         )
         averaged_no_bias = time_averaged_local_measures(
             self.X, min_order=3, max_order=3,
             device='cpu',
             bias_correction=False,
         )
-        manual_avg = local_results[3].mean(dim=2)  # [n_comb, D, 4]
+        measures_3 = torch.cat([result for _, result in local_results], dim=0)
+        manual_avg = measures_3.mean(dim=2)  # [n_comb, D, 4]
         self.assertTrue(
             torch.allclose(manual_avg, averaged_no_bias[3], rtol=0, atol=1e-12),
             "Manual time average does not match time_averaged_local_measures(bias_correction=False)",
