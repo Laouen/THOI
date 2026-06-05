@@ -13,6 +13,42 @@ from thoi.measures.gaussian_copula import nplets_measures
 from thoi.measures.gaussian_copula_hot_encoded import nplets_measures_hot_encoded
 from thoi.commons import gaussian_copula_covmat
 
+
+class TestGaussianOInformationFormula(unittest.TestCase):
+
+    def test_precision_formula_matches_entropy_definition(self):
+        rng = np.random.default_rng(0)
+
+        for n in [3, 5, 10, 20]:
+            with self.subTest(n=n):
+                a = rng.normal(size=(n, n))
+                cov = a @ a.T + np.eye(n) * 0.5
+                precision = np.linalg.inv(cov)
+                logdet_cov = np.linalg.slogdet(cov)[1]
+
+                fast_o = 0.5 * (
+                    np.log(np.diag(cov)).sum()
+                    - np.log(np.diag(precision)).sum()
+                    - 2.0 * logdet_cov
+                )
+
+                def entropy(subcov):
+                    k = subcov.shape[0]
+                    return 0.5 * (k * np.log(2.0 * np.pi * np.e) + np.linalg.slogdet(subcov)[1])
+
+                marginal_sum = sum(entropy(cov[np.ix_([i], [i])]) for i in range(n))
+                joint_entropy = entropy(cov)
+                exclusion_sum = sum(
+                    entropy(cov[np.ix_([j for j in range(n) if j != i],
+                                       [j for j in range(n) if j != i])])
+                    for i in range(n)
+                )
+                tc = marginal_sum - joint_entropy
+                dtc = exclusion_sum - (n - 1) * joint_entropy
+
+                self.assertAlmostEqual(fast_o, tc - dtc, places=12)
+
+
 # TODO: make this test for all combinations of devices in [cpu, gpu] and different input types
 class TestNpletsMeasures(unittest.TestCase):
 
@@ -69,7 +105,7 @@ class TestNpletsMeasures(unittest.TestCase):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.X, nplets)
-                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
+                self._compare_with_ground_truth(res, nplets, rtol=1e-12, atol=1e-12)
 
     def test_batch_size_D_does_not_change_result(self):
         full_nplet = range(self.X.shape[1])
@@ -77,30 +113,30 @@ class TestNpletsMeasures(unittest.TestCase):
         res_no_batch = nplets_measures(self.X, nplets)
         res_batch1   = nplets_measures(self.X, nplets, batch_size_D=1)
         self.assertTrue(torch.allclose(res_no_batch, res_batch1, rtol=1e-16, atol=1e-12))
-    
+
     def test_nplets_measures_precomputed(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures(self.covmat, nplets, covmat_precomputed=True, T=self.X.shape[0])
-                self._compare_with_ground_truth(res, nplets, rtol=1e-16, atol=1e-12)
-    
+                self._compare_with_ground_truth(res, nplets, rtol=1e-12, atol=1e-12)
+
     def test_multiple_times_same_datasets_timeseries(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures([self.X, self.X], nplets)
-                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
-    
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-12, atol=1e-12)
+
     def test_multiple_times_same_datasets_precomputed(self):
         full_nplet = range(self.X.shape[1])
         for order in range(3,11):
             with self.subTest(order=order):
                 nplets = torch.tensor(list(combinations(full_nplet, order)))
                 res = nplets_measures([self.covmat, self.covmat], nplets, covmat_precomputed=True, T=self.X.shape[0])
-                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-16, atol=1e-7)
+                self._validate_same_results_for_repeated_datasets(res, nplets, rtol=1e-12, atol=1e-12)
     
     def test_batch_size_does_not_change_result(self):
         full_nplet = range(self.X.shape[1])

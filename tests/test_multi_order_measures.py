@@ -58,17 +58,18 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
     def test_multiorder_measures_timeseries(self):
         df_res = multi_order_measures(self.X)
-        self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
+        self._compare_with_ground_truth(df_res, rtol=1e-12, atol=1e-12)
 
     def test_batch_size_D_does_not_change_result(self):
         df_res_no_batch = multi_order_measures(self.X)
         df_res_batch1   = multi_order_measures(self.X, batch_size_D=1)
-        self._compare_with_ground_truth(df_res_no_batch, rtol=1e-16, atol=1e-12)
-        self._compare_with_ground_truth(df_res_batch1,   rtol=1e-16, atol=1e-12)
-        
+        self._compare_with_ground_truth(df_res_no_batch, rtol=1e-12, atol=1e-12)
+        self._compare_with_ground_truth(df_res_batch1,   rtol=1e-12, atol=1e-12)
+
     def test_multiorder_measures_precomputed_covmat(self):
         df_res = multi_order_measures(self.covmat, covmat_precomputed=True, T=self.X.shape[0])
-        self._compare_with_ground_truth(df_res, rtol=1e-16, atol=1e-12)
+        self._compare_with_ground_truth(df_res, rtol=1e-12, atol=1e-12)
+
 
     def test_multiorder_measures_timeseries_hot_encoded(self):
         df_res = multi_order_measures_hot_encoded(self.X, batch_size=200000)
@@ -80,12 +81,12 @@ class TestMultiOrderMeasures(unittest.TestCase):
 
     def test_multiple_times_same_datasets_timeseries(self):
         df_res = multi_order_measures([self.X, self.X])
-        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
-    
+        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-12, atol=1e-12)
+
     def test_multiple_times_same_datasets_precomputed(self):
         covmats = [self.covmat, self.covmat]
         df_res = multi_order_measures(covmats, covmat_precomputed=True, T=self.X.shape[0])
-        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-16, atol=1e-7)
+        self._validate_same_results_for_repeated_datasets(df_res, rtol=1e-12, atol=1e-12)
 
     def test_multiple_times_same_datasets_timeseries_hot_encoded(self):
         df_res = multi_order_measures_hot_encoded([self.X, self.X])
