@@ -157,7 +157,9 @@ def _local_single_batch_from_xg(
         Xc = _gather_nplet_data(Xg, nplets, t0, t1)  # [B*D, Lc, K]
         Lc = t1 - t0
 
-        qj = _quad_from_chol(Lj, Xc)                  # [B*D, Lc]
+        u_t = torch.cholesky_solve(Xc.transpose(1, 2), Lj)  # [B*D, K, Lc]
+        u = u_t.transpose(1, 2)                       # [B*D, Lc, K]
+        qj = (Xc * u).sum(dim=-1)                     # [B*D, Lc]
         joint_nll = 0.5 * (K * np.log(2 * np.pi) + logdet_j.unsqueeze(1) + qj)  # [B*D, Lc]
 
         q_uni = Xc ** 2 / var.unsqueeze(1)             # [B*D, Lc, K]
@@ -168,9 +170,16 @@ def _local_single_batch_from_xg(
         tc_loc = uni_nll_sum - joint_nll               # [B*D, Lc]
 
         if K >= 3:
-            logdet_mi, qmi = _leave_one_out_stats(S, Xc, allmin1, eps)
-            loo_nll = 0.5 * (K * (K - 1) * np.log(2 * np.pi) + logdet_mi.unsqueeze(1) + qmi)
-            dtc_loc = loo_nll - (K - 1) * joint_nll
+            eye = torch.eye(K, dtype=S.dtype, device=S.device).expand(S.shape[0], K, K)
+            inv_chol = torch.linalg.solve_triangular(Lj, eye, upper=False)
+            diag_precision = (inv_chol * inv_chol).sum(dim=-2)  # [B*D, K]
+            r = (u * u / diag_precision.unsqueeze(1)).sum(dim=-1)
+            dtc_loc = 0.5 * (
+                logdet_j.unsqueeze(1)
+                + torch.log(diag_precision).sum(dim=-1).unsqueeze(1)
+                + qj
+                - r
+            )
             o_loc = tc_loc - dtc_loc
             s_loc = tc_loc + dtc_loc
         else:
