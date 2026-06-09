@@ -31,13 +31,6 @@ def _batched_chol_logdet(S, eps=1e-10):
     return L, logdet  # L:[B,k,k], logdet:[B]
 
 
-def _quad_from_chol(L, X):
-    """Compute quadratic form using Cholesky decomposition."""
-    # L:[B,k,k], X:[B,Lc,k] -> [B,Lc]
-    ZT = torch.cholesky_solve(X.transpose(1,2), L)  # [B,k,Lc]
-    return (X.transpose(1,2) * ZT).sum(1)           # [B,Lc]
-
-
 def _gather_nplet_covs(covmats, nplets):
     """Extract covariance submatrices for specified n-plets."""
     B, K = nplets.shape
@@ -62,57 +55,6 @@ def _gather_nplet_data(data, nplets, t0, t1):
     n_idx = nplets[:,None,None,:].expand(B,D,Lc,K)
     sub = data[d_idx, t_idx, n_idx]  # [B,D,Lc,K]
     return sub.reshape(B*D, Lc, K)
-
-
-def _leave_one_out_stats(S: torch.Tensor, Xc: torch.Tensor, allmin1: torch.Tensor, eps: float = 1e-10):
-    """
-    Compute leave-one-out log-determinant sum and quadratic-form sum for DTC.
-
-    Fully vectorized: one batched Cholesky and one batched triangular solve over
-    all B×K leave-one-out subsystems, replacing the previous K-iteration Python loop.
-
-    Parameters
-    ----------
-    S : torch.Tensor
-        Covariance matrices, shape (B, K, K).
-    Xc : torch.Tensor
-        Data chunk, shape (B, Lc, K).
-    allmin1 : torch.Tensor
-        Leave-one-out index table, shape (K, K-1). Precomputed via _all_min_1_ids(K).
-    eps : float, default=1e-10
-        Regularisation added to the diagonal before Cholesky.
-
-    Returns
-    -------
-    logdet_mi_sum : torch.Tensor  shape (B,)
-        Sum of log|Σ_{-i}| over all K leave-one-out subsystems.
-    qmi_sum : torch.Tensor  shape (B, Lc)
-        Sum of x_{-i}ᵀ Σ_{-i}⁻¹ x_{-i} over all K leave-one-out subsystems.
-    """
-    B, K, _ = S.shape
-    Lc = Xc.shape[1]
-
-    # --- covariance submatrices ---
-    # (B, K, K-1, K-1) then flatten to (B*K, K-1, K-1)
-    S_loo = _get_single_exclusion_covmats(S, allmin1).reshape(B * K, K - 1, K - 1)
-
-    # one batched Cholesky for all B*K subsystems
-    eye = eps * torch.eye(K - 1, device=S.device, dtype=S.dtype)
-    L_loo = torch.linalg.cholesky(S_loo + eye)                            # (B*K, K-1, K-1)
-    logdet_loo = 2 * torch.log(torch.diagonal(L_loo, dim1=-2, dim2=-1)).sum(-1)  # (B*K,)
-    logdet_mi_sum = logdet_loo.view(B, K).sum(dim=1)                      # (B,)
-
-    # --- data subsets ---
-    # Xc[:, :, allmin1] → (B, Lc, K, K-1) → permute → (B, K, Lc, K-1) → (B*K, Lc, K-1)
-    Xc_loo = Xc[:, :, allmin1].permute(0, 2, 1, 3).reshape(B * K, Lc, K - 1)
-
-    # one batched triangular solve for all B*K subsystems
-    y = torch.linalg.solve_triangular(
-        L_loo, Xc_loo.transpose(-1, -2), upper=False
-    )                                                                       # (B*K, K-1, Lc)
-    qmi_sum = (y * y).sum(dim=1).view(B, K, Lc).sum(dim=1)               # (B, Lc)
-
-    return logdet_mi_sum, qmi_sum
 
 
 def _local_single_batch_from_xg(
