@@ -20,7 +20,7 @@ def test_differentiable_oinfo_single_dataset():
     torch.manual_seed(0)
     nplets, scores = differentiable_oinfo(
         cov, initial_order=3, order=3, covmat_precomputed=True,
-        repeat=4, largest=True, max_iterations=60,
+        repeat=4, largest=True,
     )
 
     assert set(nplets[0][0].tolist()) == {0, 1, 2}
@@ -41,7 +41,7 @@ def test_differentiable_oinfo_multiple_datasets():
     torch.manual_seed(1)
     nplets, scores = differentiable_oinfo(
         covs, initial_order=3, order=3, covmat_precomputed=True,
-        repeat=4, largest=False, max_iterations=60,
+        repeat=4, largest=False,
     )
 
     assert set(nplets[0][0].tolist()) == {0, 1, 2}
