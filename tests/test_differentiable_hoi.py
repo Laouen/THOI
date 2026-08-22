@@ -35,7 +35,8 @@ def test_differentiable_hoi_metrics_and_orders():
         assert nplets[0].shape == (4, 3)
         assert nplets[1].shape == (4, 4)
         assert set(nplets[0][0].tolist()) == {0, 1, 2}
-        assert torch.isclose(scores[0, 0], torch.tensor(expected_score), atol=1e-4)
+        expected_tensor = torch.tensor(expected_score, dtype=scores.dtype)
+        assert torch.isclose(scores[0, 0], expected_tensor, atol=1e-4)
 
 
 def test_differentiable_hoi_multiple_datasets():
@@ -55,4 +56,5 @@ def test_differentiable_hoi_multiple_datasets():
     )
 
     assert set(nplets[0][0].tolist()) == {0, 1, 2}
-    assert torch.isclose(scores[0, 0], torch.tensor(-0.32351769), atol=1e-4)
+    expected = torch.tensor(-0.32351769, dtype=scores.dtype)
+    assert torch.isclose(scores[0, 0], expected, atol=1e-4)
