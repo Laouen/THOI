@@ -1,6 +1,7 @@
 import torch
 
-from thoi.heuristics import differentiable_oinfo, greedy
+from thoi.heuristics import differentiable_oinfo
+from thoi.heuristics.greedy import _next_order_greedy
 
 
 def _block_covariance(rho):
@@ -9,13 +10,19 @@ def _block_covariance(rho):
     return cov
 
 
+def _greedy_triplet_score(covmats, largest):
+    covmats = covmats.unsqueeze(0) if covmats.ndim == 2 else covmats
+    candidate, score = _next_order_greedy(
+        covmats, None, torch.tensor([[0, 1]]),
+        metric='o', largest=largest,
+    )
+    assert candidate.item() == 2
+    return score[0]
+
+
 def test_differentiable_oinfo_single_dataset():
     cov = _block_covariance(0.8)
-
-    _, greedy_scores = greedy(
-        cov, initial_order=3, order=3, covmat_precomputed=True,
-        repeat=4, largest=True,
-    )
+    greedy_score = _greedy_triplet_score(cov, largest=True)
 
     torch.manual_seed(0)
     nplets, scores = differentiable_oinfo(
@@ -24,7 +31,7 @@ def test_differentiable_oinfo_single_dataset():
     )
 
     assert set(nplets[0][0].tolist()) == {0, 1, 2}
-    assert torch.isclose(scores[0, 0], greedy_scores[0, 0], atol=1e-4)
+    assert torch.isclose(scores[0, 0], greedy_score, atol=1e-4)
 
 
 def test_differentiable_oinfo_multiple_datasets():
@@ -32,11 +39,7 @@ def test_differentiable_oinfo_multiple_datasets():
         _block_covariance(-0.45),
         _block_covariance(-0.40),
     ])
-
-    _, greedy_scores = greedy(
-        covs, initial_order=3, order=3, covmat_precomputed=True,
-        repeat=4, largest=False,
-    )
+    greedy_score = _greedy_triplet_score(covs, largest=False)
 
     torch.manual_seed(1)
     nplets, scores = differentiable_oinfo(
@@ -45,4 +48,4 @@ def test_differentiable_oinfo_multiple_datasets():
     )
 
     assert set(nplets[0][0].tolist()) == {0, 1, 2}
-    assert torch.isclose(scores[0, 0], greedy_scores[0, 0], atol=1e-4)
+    assert torch.isclose(scores[0, 0], greedy_score, atol=1e-4)
